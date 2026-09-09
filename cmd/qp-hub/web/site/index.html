@@ -66,9 +66,9 @@ section.dark{background:#000;color:#f5f5f7;--card:#1d1d1f;--tile:#1d1d1f;--ink:#
 .lede{max-width:38rem;margin:.6rem auto 0;font-size:1.15rem;color:var(--ink-2)}
 
 /* step tiles */
-.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-top:1.8rem}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1.8rem}
 .tile{background:var(--tile);border-radius:24px;padding:1.1rem;display:flex;flex-direction:column;gap:.9rem;min-width:0}
-.tile .vis{border-radius:16px;overflow:hidden;min-height:11rem;display:flex;flex-direction:column;justify-content:center}
+.tile .vis{border-radius:16px;overflow:hidden;min-height:13rem;display:flex;flex-direction:column;justify-content:center}
 .tile h3{margin-top:.2rem}
 .tile p{color:var(--ink-2);font-size:.98rem}
 .tile .n{font-size:.78rem;font-weight:600;color:var(--ink-2);letter-spacing:.02em}
@@ -109,6 +109,14 @@ section.dark{background:#000;color:#f5f5f7;--card:#1d1d1f;--tile:#1d1d1f;--ink:#
 .finder .pin{position:absolute;left:1.6rem;bottom:1.2rem;background:var(--ok-soft);color:var(--ok);font-size:.8rem;font-weight:600;padding:.45rem .7rem;border-radius:999px;opacity:0;animation:appear .5s ease 2.4s forwards}
 @keyframes pop{to{opacity:1;transform:none}}
 
+
+/* share page: form, then the link (10s loop) */
+.share{position:relative;background:var(--card);box-shadow:var(--shadow);border-radius:16px;overflow:hidden;aspect-ratio:1440/1100}
+.share img{position:absolute;inset:0;width:100%;height:auto;display:block}
+.share .sb{opacity:0;animation:shareB 10s ease-in-out infinite}
+.share .sa{animation:shareA 10s ease-in-out infinite}
+@keyframes shareA{0%,44%{opacity:1}50%,94%{opacity:0}100%{opacity:1}}
+@keyframes shareB{0%,46%{opacity:0}52%,94%{opacity:1}100%{opacity:0}}
 
 /* circles board */
 /* circles explainer */
@@ -209,6 +217,7 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
   *{animation:none!important;transition:none!important}
   .folder,.finder .pin{opacity:1;transform:none}
   .dlg.d1{opacity:0}.dlg.d2{opacity:1;transform:none}.dlg-prog{opacity:0}
+  .share .sa{opacity:0}.share .sb{opacity:1}
   .p1,.p3{opacity:0}
   .p2{opacity:1;transform:translate(504px,90px)}.p2 .lock{opacity:0}.p2 .file{opacity:1}
   .p4{opacity:1;transform:translate(96px,90px)}.p4 .lock{opacity:0}.p4 .file{opacity:1}
@@ -280,7 +289,7 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
 </div></section>
 
 <section id="how"><div class="wrap">
-  <div class="center"><h2>3 steps. No account.</h2><p class="lede">About 1 minute from link to folder.</p></div>
+  <div class="center"><h2>4 steps. No account.</h2><p class="lede">About 1 minute from link to folder.</p></div>
   <div class="tiles">
     <div class="tile">
       <div class="vis"><div class="shot"><div class="chip">https://quietport.app/j/<b>fbco4tqe5qh5wwfibe2oiuypfu</b></div><img src="/assets/invite-page.png" width="1800" height="1040" alt="The invite page with 1 Download button"></div></div>
@@ -305,6 +314,10 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
     </div></div>
       <div><div class="n">Step 3</div><h3>Your folder is ready.</h3><p>It appears in Finder or File Explorer. It looks like any other folder and works the same way.</p></div>
     </div>
+    <div class="tile">
+      <div class="vis"><div class="share" role="img" aria-label="The Share a folder page: pick a folder, type a name, get a link"><img class="sa" src="/assets/share-a.png" width="1440" height="1100" alt=""><img class="sb" src="/assets/share-b.png" width="1440" height="1100" alt=""></div></div>
+      <div><div class="n">Step 4</div><h3>Invite someone.</h3><p>Open <b>Share a folder</b> in QPSync. Pick the folder, type a name, and send them the link.</p></div>
+    </div>
   </div>
 </div></section>
 
@@ -324,7 +337,7 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
     </div>
     <p class="board-cap">Person 3 sees 1 folder. Circles A and B do not exist for them. You are in all 3.</p>
   </div>
-  <p class="lede center" style="margin-top:1.4rem">Anyone in a circle can invite someone to it. Open <b>Share a folder</b> in QPSync, pick the folder, type a name, send the link.</p>
+  <p class="lede center" style="margin-top:1.4rem">Anyone in a circle can invite someone to it.</p>
 </div></section>
 
 <section class="alt" id="download"><div class="wrap">
