@@ -58,3 +58,20 @@ func fail(msg, support string) {
 	msgbox("Quietport could not be installed: "+msg+" Please contact "+support+".", "Quietport", mbOK|mbIconError)
 	exit(1)
 }
+
+func askStartOrJoin() bool {
+	// Yes = paste a link (the common case), No = start a new folder
+	r := msgbox("Do you have an invite link?\n\nYes: paste the link you were sent.\nNo: start a new folder of your own.", "Quietport", mbYesNo|mbIconInfo)
+	return r != idYes
+}
+
+func askText(prompt, def string) string {
+	ps := `Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::InputBox('` + strings.ReplaceAll(prompt, "'", "''") + `', 'Quietport', '` + strings.ReplaceAll(def, "'", "''") + `')`
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}

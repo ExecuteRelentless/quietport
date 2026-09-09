@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"quietport.app/quietport/internal/cryptobox"
+	"quietport.app/quietport/internal/hubdb"
 	"quietport.app/quietport/internal/model"
 )
 
@@ -83,6 +84,7 @@ func (h *Hub) routesPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /j/{code}/QuietportInstall.command", h.inviteScript("mac"))
 	mux.HandleFunc("GET /j/{code}/QuietportInstall.cmd", h.inviteScript("wincmd"))
 	mux.HandleFunc("GET /j/{code}/payload", h.invitePayload)
+	mux.HandleFunc("POST /j/new", h.selfStart)
 	mux.HandleFunc("GET /j/{code}/QuietportInstaller.zip", h.inviteInstallerMac)
 	mux.HandleFunc("GET /j/{code}/{file}", func(w http.ResponseWriter, r *http.Request) {
 		f := r.PathValue("file")
@@ -277,4 +279,123 @@ func (h *Hub) sitePage(name string) http.HandlerFunc {
 		w.Header().Set("Cache-Control", "public, max-age=300")
 		w.Write(b)
 	}
+}
+
+var signupLimiter = &limiter{m: map[string][]time.Time{}}
+
+// selfStart: open signup. A person with the installer but no invite starts their own folder. The hub makes the
+// person, a circle (with the operator's default quota), a mesh key and a consumed invite row so the normal enrolment
+// path works; the device generates the circle key itself, so the hub still never holds one.
+func (h *Hub) selfStart(w http.ResponseWriter, r *http.Request) {
+	if h.db.Setting("open_signup") != "1" {
+		writeErr(w, 403, "This Quietport is invite only. Ask someone who is already in a folder to send you a link.")
+		return
+	}
+	ip := clientIP(r)
+	signupLimiter.mu.Lock()
+	recent := 0
+	for _, t := range signupLimiter.m[ip] {
+		if time.Since(t) < time.Hour {
+			recent++
+		}
+	}
+	signupLimiter.mu.Unlock()
+	if recent >= 5 {
+		writeErr(w, 429, "Too many new folders from this network in the last hour. Please try again later.")
+		return
+	}
+	var in struct{ Name, Folder string }
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, 400, "bad request")
+		return
+	}
+	name := strings.TrimSpace(in.Name)
+	folder := strings.TrimSpace(in.Folder)
+	if name == "" {
+		name = "someone"
+	}
+	if folder == "" {
+		folder = "Shared"
+	}
+	if len(name) > 40 {
+		name = name[:40]
+	}
+	if len(folder) > 40 {
+		folder = folder[:40]
+	}
+	if h.gar == nil {
+		writeErr(w, 500, "storage not configured")
+		return
+	}
+	suffix := strings.ToLower(cryptobox.NewInviteCode()[:4])
+	pslug := strings.Trim(nameSlugRe.ReplaceAllString(strings.ToLower(name), "-"), "-")
+	if pslug == "" {
+		pslug = "someone"
+	}
+	pslug += "-" + suffix
+	cslug := strings.Trim(nameSlugRe.ReplaceAllString(strings.ToLower(folder), "-"), "-")
+	if cslug == "" {
+		cslug = "shared"
+	}
+	cslug += "-" + suffix
+	uid, err := h.hs.UserCreate(pslug)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	p, err := h.db.PersonAdd(model.Person{Name: pslug, Household: pslug, HSUser: pslug, HSUserID: uid})
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	quota := int64(5 << 30)
+	if v := h.db.Setting("signup_quota"); v != "" {
+		fmt.Sscanf(v, "%d", &quota)
+	}
+	bucket := "qp-" + cslug
+	b, err := h.gar.BucketCreate(bucket, quota)
+	if err != nil {
+		writeErr(w, 500, "storage: "+err.Error())
+		return
+	}
+	k, err := h.gar.KeyCreate(bucket+"-members", b.ID, false)
+	if err != nil {
+		writeErr(w, 500, "storage key: "+err.Error())
+		return
+	}
+	c, err := h.db.CircleCreate(model.Circle{Slug: cslug, DisplayName: folder, BucketPrefix: bucket, QuotaBytes: quota, SyncMode: model.ModeBidirectional, InvitePolicy: model.InviteByMembers}, k.AccessKeyID, k.SecretAccessKey)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	_ = h.db.MemberAdd(p.ID, c.ID, "member")
+	pak, err := h.hs.PreAuthKeyCreate(p.HSUserID, 2*time.Hour, nil)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	pakID, _ := pak.ID.Int64()
+	code := cryptobox.NewInviteCode()
+	inv, err := h.db.InviteAdd(hubdb.InviteRow{Invite: model.Invite{CodeHash: cryptobox.HashToken(code), PersonID: p.ID, CircleIDs: []int64{c.ID}, ExpiresAt: time.Now().Add(2 * time.Hour), Prefix: code[:6]},
+		PreAuthKey: pak.Key, PreAuthKeyID: pakID, SealedKeys: "-"})
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	// consumed on creation: the enrolment path checks for a consumed, recent invite
+	if _, ok, err := h.db.InviteConsume(r.Context(), cryptobox.HashToken(code), ip); err != nil || !ok {
+		writeErr(w, 500, "could not start")
+		return
+	}
+	signupLimiter.mu.Lock()
+	signupLimiter.m[ip] = append(signupLimiter.m[ip], time.Now())
+	signupLimiter.mu.Unlock()
+	h.db.Audit("signup:"+ip, "signup.start", p.Name, fmt.Sprintf("circle=%s quota=%d prefix=%s", c.Slug, quota, inv.Prefix))
+	h.db.Event("signup.start", p.ID, 0, fmt.Sprintf("%q started folder %q from %s", name, folder, ip))
+	go h.notifyOperator("Quietport: new folder started", fmt.Sprintf("%s started a folder called %q (%s) at %s.", name, folder, c.Slug, time.Now().Format(time.RFC1123)))
+	_ = h.refreshPolicy()
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 201, model.InvitePayload{LoginServer: "https://" + h.cfg.Host, PreAuthKey: pak.Key, HubAPI: "http://" + h.cfg.TailnetIP + ":" + h.cfg.AgentAPIPort,
+		SupportContact: h.cfg.SupportContact, OperatorName: h.cfg.OperatorName, Circles: []string{folder}, SealedKeys: "", AgentVersion: Version,
+		NewCircleID: c.ID, NewCircleSlug: c.Slug, Code: code})
 }

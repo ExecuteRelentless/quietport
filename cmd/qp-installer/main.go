@@ -40,14 +40,26 @@ func main() {
 		fmt.Printf("host=%s code=%s\n", host, code)
 		return
 	}
+	var startName, startFolder string
 	if code == "" {
-		link := askLink()
-		if link == "" {
-			os.Exit(1)
-		}
-		host, code = parseLink(link)
-		if code == "" {
-			fail("that does not look like a Quietport invite link.", "")
+		if askStartOrJoin() { // start a new folder
+			startName = askText("What is your name?", "")
+			if startName == "" {
+				os.Exit(0)
+			}
+			startFolder = askText("Name your folder.", "Shared")
+			if startFolder == "" {
+				startFolder = "Shared"
+			}
+		} else {
+			link := askLink()
+			if link == "" {
+				os.Exit(1)
+			}
+			host, code = parseLink(link)
+			if code == "" {
+				fail("that does not look like a Quietport invite link.", "")
+			}
 		}
 	}
 	if host == "" {
@@ -57,10 +69,59 @@ func main() {
 		os.Exit(0)
 	}
 	support := ""
-	if err := run(host, code, &support); err != nil {
+	if startName != "" {
+		if err := runStart(host, startName, startFolder, &support); err != nil {
+			fail(err.Error(), support)
+		}
+	} else if err := run(host, code, &support); err != nil {
 		fail(err.Error(), support)
 	}
 	done()
+}
+
+// runStart: open signup. Ask the hub for a fresh person + folder, then install exactly like an invite.
+func runStart(host, name, folder string, support *string) error {
+	app := agent.AppDir()
+	if err := os.MkdirAll(app, 0o700); err != nil {
+		return errors.New("the application folder could not be created.")
+	}
+	if err := installBundled(app); err != nil && err != errNoBundled {
+		return errors.New("the bundled files could not be copied.")
+	}
+	client := &http.Client{Timeout: 2 * time.Minute}
+	body, _ := jsonMarshal(map[string]string{"name": name, "folder": folder})
+	resp, err := client.Post(fmt.Sprintf("https://%s/j/new", host), "application/json", bytes.NewReader(body))
+	if err != nil {
+		return errors.New("the server could not be reached.")
+	}
+	defer resp.Body.Close()
+	pl, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != 201 {
+		var e struct{ Error string }
+		_ = json(pl, &e)
+		if e.Error != "" {
+			return errors.New(e.Error)
+		}
+		return errors.New("the server did not accept a new folder.")
+	}
+	var p struct {
+		Code           string `json:"code"`
+		SupportContact string `json:"support_contact"`
+		OperatorName   string `json:"operator_name"`
+	}
+	if json(pl, &p) != nil || p.Code == "" {
+		return errors.New("the server sent an unexpected reply.")
+	}
+	if p.SupportContact != "" {
+		*support = p.OperatorName + " (" + p.SupportContact + ")"
+	}
+	plPath := filepath.Join(app, "payload.json")
+	if err := os.WriteFile(plPath, pl, 0o600); err != nil {
+		return errors.New("the invitation could not be saved.")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+	return agent.Install(ctx, p.Code, plPath)
 }
 
 // findInvite reads the code from the bundle / exe name, and the host from the download-origin metadata when present.

@@ -17,3 +17,14 @@ func askLink() string {
 }
 func done()                    { fmt.Println("Quietport is connected.") }
 func fail(msg, support string) { fmt.Println("Quietport could not be installed:", msg, "Please contact", support+"."); exit(1) }
+
+func askStartOrJoin() bool { return false }
+func askText(prompt, def string) string {
+	fmt.Printf("%s [%s]: ", prompt, def)
+	s, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return def
+	}
+	return s
+}

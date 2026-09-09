@@ -29,7 +29,10 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 		return errors.New("the invitation file is damaged.")
 	}
 	var keys []model.CircleKey
-	if err := cryptobox.OpenWithCode(code, p.SealedKeys, &keys); err != nil {
+	if p.NewCircleID != 0 {
+		// self-serve start: this computer creates the folder's key (FR-49 moved to the founding member's device)
+		keys = append(keys, model.CircleKey{Slug: p.NewCircleSlug, Generation: 1, Password: cryptobox.NewCircleSecret(), Salt: cryptobox.NewCircleSecret()})
+	} else if err := cryptobox.OpenWithCode(code, p.SealedKeys, &keys); err != nil {
 		return errors.New("the invitation code does not match this installer.")
 	}
 	store, err := OpenStore()

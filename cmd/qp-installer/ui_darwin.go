@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 
@@ -42,4 +43,21 @@ func fail(msg, support string) {
 	}
 	_, _ = dialog(`display dialog "Quietport could not be installed: ` + esc(msg) + ` Please contact ` + esc(support) + `." with title "Quietport" buttons {"OK"} default button "OK" with icon stop`)
 	exit(1)
+}
+
+// askStartOrJoin: true = start a new folder, false = paste a link.
+func askStartOrJoin() bool {
+	out, err := dialog(`button returned of (display dialog "Do you have an invite link?" with title "Quietport" buttons {"Start a new folder", "Paste a link"} default button "Paste a link" with icon note)`)
+	if err != nil {
+		os.Exit(0)
+	}
+	return out == "Start a new folder"
+}
+
+func askText(prompt, def string) string {
+	out, err := dialog(`text returned of (display dialog "` + esc(prompt) + `" with title "Quietport" default answer "` + esc(def) + `" buttons {"Cancel", "Continue"} default button "Continue")`)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
 }

@@ -54,6 +54,18 @@ person record from the typed name (no email), a mesh user and a pre-auth key. Wo
   as `<name>-xxxx` with no email, `qpctl logs <inviter>` shows `invite.created`.
 - Undo: `qpctl invite revoke <prefix>` before it is used; `qpctl offboard <person> --confirm <person>` after.
 
+
+## Open signup (strangers can start their own folder)
+
+`qpctl settings open_signup=1` lets anyone who has the installer (the public download) choose "Start a new folder",
+type a name and a folder name, and get going without an invite. The hub creates the person (no email), a circle with
+`signup_quota` bytes (default 5 GB), a mesh key, and the device generates the circle key itself. The founder can then
+invite others from "Share a folder". `open_signup=0` turns it off; the installer then tells them to ask for a link.
+Rate limit: 5 new folders per IP per hour. Every start is in `qpctl audit` as `signup.start` and in `qpctl events`.
+
+Caveat: the operator's keystore never holds the key of a self-started circle, so `qpctl circle rotate-key` and
+`qpctl keys verify` cannot act on it; offboarding a member of such a circle revokes and removes but skips rotation.
+
 ## Adding someone to another circle
 
 ```

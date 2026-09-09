@@ -189,6 +189,10 @@ type InvitePayload struct {
 	Circles        []string `json:"circles"` // display names, for folder creation before first sync
 	SealedKeys     string   `json:"sealed_keys"` // base64 chacha20poly1305(JSON []CircleKey) under HKDF(code)
 	AgentVersion   string   `json:"agent_version"`
+	// self-serve start (open signup): the device creates the key for this circle itself
+	NewCircleID   int64  `json:"new_circle_id,omitempty"`
+	NewCircleSlug string `json:"new_circle_slug,omitempty"`
+	Code          string `json:"code,omitempty"` // only in /j/new responses: the enrolment code the hub minted
 }
 
 type AuditEntry struct {

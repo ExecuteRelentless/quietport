@@ -90,6 +90,7 @@ func usage() {
   qpctl backup verify
   qpctl keys export --out FILE | split --out DIR [--shares 5] [--threshold 3] | recover --bundle FILE --share F... --out FILE | verify [--bundle FILE]
   qpctl audit [--limit 200]
+  qpctl settings open_signup=1|0 signup_quota=<bytes>     let strangers start their own folder from the installer
 `)
 	os.Exit(2)
 }
