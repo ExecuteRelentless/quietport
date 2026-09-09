@@ -118,6 +118,15 @@ section.dark{background:#000;color:#f5f5f7;--card:#1d1d1f;--tile:#1d1d1f;--ink:#
 @keyframes shareA{0%,44%{opacity:1}50%,94%{opacity:0}100%{opacity:1}}
 @keyframes shareB{0%,46%{opacity:0}52%,94%{opacity:1}100%{opacity:0}}
 
+/* faq */
+.faq{max-width:44rem;margin:1.6rem auto 0;border-top:1px solid var(--line)}
+.faq details{border-bottom:1px solid var(--line);padding:.2rem 0}
+.faq summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:1rem 0;font-weight:600;font-size:1.1rem}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-weight:400;font-size:1.4rem;color:var(--ink-2);transition:transform .25s ease}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq p{color:var(--ink-2);padding:0 0 1.1rem;max-width:40rem}
+
 /* circles board */
 /* circles explainer */
 .circles .intro{max-width:34rem;color:var(--ink-2)}
@@ -225,7 +234,7 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
 </style>
 </head>
 <body>
-<nav><div class="wrap"><a class="brand" href="/"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor"/><circle cx="16" cy="16" r="7.5" fill="none" stroke="var(--bg)" stroke-width="2.6"/><path d="M16 23.5V29" stroke="var(--bg)" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="16" r="2.4" fill="var(--bg)"/></svg>Quietport</a><div class="links"><a href="#how">How it works</a><a href="#circles">Circles</a><a href="#download">Download</a></div></div></nav>
+<nav><div class="wrap"><a class="brand" href="/"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor"/><circle cx="16" cy="16" r="7.5" fill="none" stroke="var(--bg)" stroke-width="2.6"/><path d="M16 23.5V29" stroke="var(--bg)" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="16" r="2.4" fill="var(--bg)"/></svg>Quietport</a><div class="links"><a href="#how">How it works</a><a href="#circles">Circles</a><a href="#download">Download</a><a href="#faq">Questions</a></div></div></nav>
 
 <section class="hero"><div class="wrap center">
   <h1>Share a folder. Privately.</h1>
@@ -349,7 +358,24 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
   <p class="ops">Running your own: <a href="/dl/quietport-hub-linux-arm64.tar.gz">Hub, Linux arm64</a> <a href="/dl/quietport-hub-linux-amd64.tar.gz">Hub, Linux x86</a> <a href="/dl/quietport-operator-darwin-arm64.tar.gz">Operator tools, Mac</a> <a href="/dl/SHA256SUMS.signed">Signed checksums</a></p>
 </div></section>
 
-<footer><div class="wrap"><span>Built with ❤️ in San Francisco</span><span>Quietport 0.1.5</span></div></footer>
+
+<section id="faq"><div class="wrap">
+  <div class="center"><h2>Questions</h2></div>
+  <div class="faq">
+    <details open><summary>Why does Quietport exist?</summary><p>Because sharing files with your family or a small group should not mean creating accounts, learning an app, and trusting a company with what is inside. Quietport is a folder that shows up on the computers of the people you choose, and nobody else can read it, not even the server.</p></details>
+    <details><summary>How is it different from Dropbox, Google Drive or iCloud?</summary><p>Those services can read what you store, because their servers hold the keys. Quietport's server holds only encrypted files with encrypted names, and never a key. There is no account either: a link from a friend, or a folder you start yourself, is the whole setup. And you can run the whole thing on your own small server in about 15 minutes.</p></details>
+    <details><summary>Is it secure?</summary><p>Files and their names are encrypted on your computer before they leave it, with a key that only the members of that folder have. On top of that they travel inside an encrypted tunnel. The server stores ciphertext only, so a copy of the server gives an attacker nothing. Quietport uses proven, audited building blocks (rclone's encryption and WireGuard) and no home-made cryptography. Every computer is added on purpose, and nothing is public.</p></details>
+    <details><summary>Who can see my files?</summary><p>Only the people in that folder. A folder you are not in does not appear on your computer at all.</p></details>
+    <details><summary>What if someone leaves, or a laptop is lost?</summary><p>The person who runs Quietport removes that computer with 1 command. The folder gets a new key and the files on the server are re-encrypted, so the old computer cannot read anything new. What it had already downloaded stays with it, as with any file you have ever sent someone.</p></details>
+    <details><summary>Does it cost anything?</summary><p>No. Quietport is free, and the code is open for anyone to read and run. If you run your own, the only cost is a small server, which some clouds give away. If it saves you something, you can <a href="https://buymeacoffee.com" rel="noopener">buy Quietport a coffee</a>.</p></details>
+    <details><summary>Why is it free?</summary><p>It was built to solve a real problem for one family first, and it is more useful when anyone can read the code and run it themselves. There is no company behind it and nothing to sell you inside the folder.</p></details>
+    <details><summary>Does it work on phones or Chromebooks?</summary><p>Not yet. Mac and Windows today.</p></details>
+    <details><summary>How big can a file be?</summary><p>Up to 10 GB each. If a transfer is interrupted, it picks up where it left off.</p></details>
+  </div>
+  <p class="center" style="margin-top:1.6rem"><a class="btn" href="https://buymeacoffee.com" rel="noopener">Support the project</a></p>
+</div></section>
+
+<footer><div class="wrap"><span>Built with ❤️ in San Francisco</span><span><a href="https://buymeacoffee.com" rel="noopener">Buy Quietport a coffee</a> · Quietport 0.1.6</span></div></footer>
 <script>
 (function(){
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
