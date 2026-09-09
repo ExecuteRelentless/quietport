@@ -9,15 +9,23 @@ OUT="$R/dist/$V"
 RCLONE_VER=v1.75.1
 KEYS="$R/../release-keys"
 PUB=$(cat "$KEYS/release.pub" 2>/dev/null || echo "")
+LDW="-X main.Version=$V -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=$PUB"
 LD="-s -w -X main.Version=$V -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=$PUB"
 mkdir -p "$OUT"
 cd "$R"
 
 build(){ # os arch out
-  local ext=""; [ "$1" = windows ] && ext=.exe
-  CGO_ENABLED=0 GOOS=$1 GOARCH=$2 go build -trimpath -ldflags "$LD" -o "$3/qpsync-agent$ext" ./cmd/qpsync-agent
-  CGO_ENABLED=0 GOOS=$1 GOARCH=$2 go build -trimpath -ldflags "$LD" -o "$3/qpctl$ext" ./cmd/qpctl
+  local ext="" flags="$LD"; [ "$1" = windows ] && { ext=.exe; flags="$LDW"; }
+  CGO_ENABLED=0 GOOS=$1 GOARCH=$2 go build -trimpath -ldflags "$flags" -o "$3/qpsync-agent$ext" ./cmd/qpsync-agent
+  CGO_ENABLED=0 GOOS=$1 GOARCH=$2 go build -trimpath -ldflags "$flags" -o "$3/qpctl$ext" ./cmd/qpctl
 }
+
+echo "== windows resources (icon, version info, manifest)"
+export PATH="$PATH:$HOME/go/bin"
+for d in cmd/qp-installer cmd/qpsync-agent; do
+  sed -E "s/\"(file_version|product_version)\": \"[0-9.]+\"/\"\1\": \"$V.0\"/g; s/\"(FileVersion|ProductVersion)\": \"[0-9.]+\"/\"\1\": \"$V\"/g; s/\"version\": \"[0-9.]+\"/\"version\": \"$V.0\"/" "$d/winres/winres.json" > "$d/winres/.gen.json"
+  (cd "$d" && go-winres make --arch amd64 --in winres/.gen.json >/dev/null && rm -f winres/.gen.json)
+done
 
 echo "== hub (linux/arm64 + amd64)"
 for a in arm64 amd64; do

@@ -9,6 +9,7 @@ R=$(cd "$(dirname "$0")/.." && pwd); cd "$R"
 OUT="/private/tmp/qp-installer-build/$V"; rm -rf "$OUT"; mkdir -p "$OUT" "$R/dist/$V"
 IDENTITY="${SIGN_IDENTITY:-Developer ID Application}" # the login keychain holds one Developer ID Application identity
 PUB=$(cat "$R/../release-keys/release.pub" 2>/dev/null || echo "")
+LDW="-X main.Version=$V -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=$PUB"
 LD="-s -w -X main.Version=$V -X main.DefaultHost=$HOST -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=$PUB"
 
 echo "== macOS universal binary"
@@ -102,7 +103,7 @@ echo "== Windows installer exe (client zip embedded)"
 WZ="$R/dist/$V/quietport-windows-amd64-$V.zip"
 [ -f "$WZ" ] || { echo "run scripts/build.sh $V first ($WZ missing)"; exit 1; }
 cp "$WZ" "$R/cmd/qp-installer/bundle.zip"
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LD -H windowsgui" -o "$R/dist/$V/quietport-installer-windows-amd64.exe" ./cmd/qp-installer
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDW -H windowsgui" -o "$R/dist/$V/quietport-installer-windows-amd64.exe" ./cmd/qp-installer
 rm -f "$R/cmd/qp-installer/bundle.zip"
 echo "== add the installers to the signed checksum list"
 if [ -f "$R/../release-keys/release.key" ]; then
