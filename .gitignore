@@ -4,3 +4,7 @@ cmd/qp-installer/bundle.zip
 cmd/qp-installer/bundle.tar.gz
 *.syso
 winres/.gen.json
+qp-hub
+qpctl
+qpsync-agent
+qp-installer
