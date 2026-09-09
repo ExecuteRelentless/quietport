@@ -95,4 +95,12 @@ WZ="$R/dist/$V/quietport-windows-amd64-$V.zip"
 cp "$WZ" "$R/cmd/qp-installer/bundle.zip"
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LD -H windowsgui" -o "$R/dist/$V/quietport-installer-windows-amd64.exe" ./cmd/qp-installer
 rm -f "$R/cmd/qp-installer/bundle.zip"
+echo "== add the installers to the signed checksum list"
+if [ -f "$R/../release-keys/release.key" ]; then
+  for f in "$R/dist/$V/quietport-installer-darwin.dmg" "$R/dist/$V/quietport-installer-windows-amd64.exe" "$R/dist/$V/quietport-installer-darwin.tar.gz"; do
+    sha=$(shasum -a 256 "$f" | cut -d' ' -f1); sig=$(cd "$R" && go run ./scripts/sign -key "$R/../release-keys/release.key" -msg "$sha")
+    grep -v " $(basename "$f") " "$R/dist/$V/SHA256SUMS.signed" > "$R/dist/$V/SHA256SUMS.tmp" 2>/dev/null || true
+    echo "$sha  $(basename "$f")  $sig" >> "$R/dist/$V/SHA256SUMS.tmp"; mv "$R/dist/$V/SHA256SUMS.tmp" "$R/dist/$V/SHA256SUMS.signed"
+  done
+fi
 ls -la "$R/dist/$V/quietport-installer-darwin.tar.gz" "$R/dist/$V/quietport-installer-darwin.dmg" "$R/dist/$V/quietport-installer-windows-amd64.exe"

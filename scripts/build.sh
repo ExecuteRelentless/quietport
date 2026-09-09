@@ -25,7 +25,8 @@ for a in arm64 amd64; do
   CGO_ENABLED=0 GOOS=linux GOARCH=$a go build -trimpath -ldflags "$LD" -o "$OUT/hub-linux-$a/qp-hub" ./cmd/qp-hub
   CGO_ENABLED=0 GOOS=linux GOARCH=$a go build -trimpath -ldflags "$LD" -o "$OUT/hub-linux-$a/qpctl" ./cmd/qpctl
   cp -R deploy "$OUT/hub-linux-$a/"
-  (cd "$OUT" && tar czf "quietport-hub-linux-$a.tar.gz" "hub-linux-$a")
+  mkdir -p "$OUT/hub-linux-$a/docs"; cp README.md LICENSE "$OUT/hub-linux-$a/"; cp docs/RUNBOOK.md "$OUT/hub-linux-$a/docs/"
+  (cd "$OUT" && COPYFILE_DISABLE=1 tar czf "quietport-hub-linux-$a.tar.gz" "hub-linux-$a")
 done
 
 echo "== client bundles"
@@ -50,6 +51,7 @@ echo "== operator kit (qpctl + rclone) for the Mac"
 mkdir -p "$OUT/operator-darwin-arm64" "$OUT/operator-darwin-amd64"
 cp "$OUT/client-darwin-arm64/qpctl" "$OUT/client-darwin-arm64/rclone" "$OUT/operator-darwin-arm64/"
 cp "$OUT/client-darwin-amd64/qpctl" "$OUT/client-darwin-amd64/rclone" "$OUT/operator-darwin-amd64/"
+for d in operator-darwin-arm64 operator-darwin-amd64; do mkdir -p "$OUT/$d/docs"; cp README.md LICENSE "$OUT/$d/"; cp docs/RUNBOOK.md "$OUT/$d/docs/"; done
 (cd "$OUT" && COPYFILE_DISABLE=1 tar czf quietport-operator-darwin-arm64.tar.gz operator-darwin-arm64 && COPYFILE_DISABLE=1 tar czf quietport-operator-darwin-amd64.tar.gz operator-darwin-amd64)
 
 echo "== signatures (NFR-40)"
