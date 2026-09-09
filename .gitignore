@@ -1,3 +1,4 @@
 dist/
 *.tmp
 cmd/qp-installer/bundle.zip
+cmd/qp-installer/bundle.tar.gz

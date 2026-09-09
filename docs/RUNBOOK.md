@@ -126,6 +126,8 @@ operator's Mac. Without it the backup is ciphertext.
   name (via `hdiutil info`) or from the app folder name, and asks for the link if neither carries one.
 - Windows: `Quietport-<code>.exe`, the same installer with the client zip embedded (`go:embed`), no console window,
   MessageBox dialogs. Unsigned (no Windows certificate): SmartScreen shows More info / Run anyway once.
+- Linux (best effort): `quietport-installer-linux-<arch>`, client tarball embedded, prompts in the terminal, installs a
+  systemd user unit. Run it as `./Quietport-linux-amd64` (no invite in the name: it asks for the link or offers to start a folder).
 - Both still fall back to downloading the client bundle from `/dl/` if a build ships without the embedded files.
 - Build: `scripts/build.sh <v>` then `NOTARY_PROFILE=ari-notary scripts/build-installer.sh <v> <hub host>`;
   publish with `deploy/publish-release.sh <v>` on the hub after copying `quietport-installer-darwin.dmg`,
@@ -151,7 +153,11 @@ Windows: open PowerShell and paste `& "$env:LOCALAPPDATA\Quietport\qp.cmd" statu
 
 It prints the hub contact time, connection type, and per-folder last sync + last error, with no file names.
 
-Uninstall: the same path with `uninstall` (add `--remove-folder` to delete QPSync too). No admin rights.
+Uninstall, 3 ways, all without admin rights and all leaving nothing behind (startup entry, app folder, keychain/DPAPI
+entry, sidebar pin, the Share shortcut; the QPSync folder only if they say so):
+- From the folder: open **Share a folder**, click "Remove Quietport from this computer".
+- From the installer: open Quietport.dmg / Quietport.exe / the Linux installer again; it notices the install and offers Remove.
+- From a terminal: the `qp` path above with `uninstall` (`--remove-folder` to delete QPSync too). Linux: `~/.local/share/quietport/qp uninstall`.
 
 ## Known limits in this build
 

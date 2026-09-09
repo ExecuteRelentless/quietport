@@ -89,6 +89,15 @@ fi
 spctl -a -vv -t open --context context:primary-signature "$DMG" 2>&1 | tail -2 || true
 cp "$DMG" "$R/dist/$V/quietport-installer-darwin.dmg"
 
+echo "== Linux installers (client tarball embedded, terminal prompts)"
+for a in amd64 arm64; do
+  LT="$R/dist/$V/quietport-linux-$a-$V.tar.gz"
+  [ -f "$LT" ] || { echo "run scripts/build.sh $V first ($LT missing)"; exit 1; }
+  cp "$LT" "$R/cmd/qp-installer/bundle.tar.gz"
+  CGO_ENABLED=0 GOOS=linux GOARCH=$a go build -trimpath -ldflags "$LD" -o "$R/dist/$V/quietport-installer-linux-$a" ./cmd/qp-installer
+  rm -f "$R/cmd/qp-installer/bundle.tar.gz"
+done
+
 echo "== Windows installer exe (client zip embedded)"
 WZ="$R/dist/$V/quietport-windows-amd64-$V.zip"
 [ -f "$WZ" ] || { echo "run scripts/build.sh $V first ($WZ missing)"; exit 1; }
@@ -97,7 +106,7 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LD -H wind
 rm -f "$R/cmd/qp-installer/bundle.zip"
 echo "== add the installers to the signed checksum list"
 if [ -f "$R/../release-keys/release.key" ]; then
-  for f in "$R/dist/$V/quietport-installer-darwin.dmg" "$R/dist/$V/quietport-installer-windows-amd64.exe" "$R/dist/$V/quietport-installer-darwin.tar.gz"; do
+  for f in "$R/dist/$V/quietport-installer-darwin.dmg" "$R/dist/$V/quietport-installer-windows-amd64.exe" "$R/dist/$V/quietport-installer-darwin.tar.gz" "$R/dist/$V/quietport-installer-linux-amd64" "$R/dist/$V/quietport-installer-linux-arm64"; do
     sha=$(shasum -a 256 "$f" | cut -d' ' -f1); sig=$(cd "$R" && go run ./scripts/sign -key "$R/../release-keys/release.key" -msg "$sha")
     grep -v " $(basename "$f") " "$R/dist/$V/SHA256SUMS.signed" > "$R/dist/$V/SHA256SUMS.tmp" 2>/dev/null || true
     echo "$sha  $(basename "$f")  $sig" >> "$R/dist/$V/SHA256SUMS.tmp"; mv "$R/dist/$V/SHA256SUMS.tmp" "$R/dist/$V/SHA256SUMS.signed"

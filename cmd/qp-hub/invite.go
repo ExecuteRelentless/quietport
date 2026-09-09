@@ -260,6 +260,9 @@ func (h *Hub) download(w http.ResponseWriter, r *http.Request) {
 	case "Quietport.exe":
 		w.Header().Set("Content-Disposition", `attachment; filename="Quietport.exe"`)
 		name = "quietport-installer-windows-amd64.exe"
+	case "Quietport-linux-amd64", "Quietport-linux-arm64":
+		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+		name = "quietport-installer-linux-" + strings.TrimPrefix(name, "Quietport-linux-")
 	}
 	if !strings.HasPrefix(name, "quietport-") && name != "SHA256SUMS.signed" {
 		http.NotFound(w, r)

@@ -61,3 +61,34 @@ func askText(prompt, def string) string {
 	}
 	return strings.TrimSpace(out)
 }
+
+// askInstalled: Quietport is already here. remove | join | cancel
+func askInstalled() string {
+	out, err := dialog(`button returned of (display dialog "Quietport is already set up on this computer." with title "Quietport" buttons {"Remove Quietport", "Use a new link", "Cancel"} default button "Cancel" with icon note)`)
+	if err != nil {
+		return "cancel"
+	}
+	switch out {
+	case "Remove Quietport":
+		return "remove"
+	case "Use a new link":
+		return "join"
+	}
+	return "cancel"
+}
+
+func askKeepFolder() bool {
+	out, err := dialog(`button returned of (display dialog "Keep your files in the QPSync folder? They will stop updating." with title "Quietport" buttons {"Delete the folder too", "Keep my files"} default button "Keep my files" with icon caution)`)
+	if err != nil {
+		return true
+	}
+	return out != "Delete the folder too"
+}
+
+func removed(keep bool) {
+	msg := "Quietport has been removed. Your files are still in the QPSync folder."
+	if !keep {
+		msg = "Quietport and the QPSync folder have been removed."
+	}
+	_, _ = dialog(`display dialog "` + esc(msg) + `" with title "Quietport" buttons {"OK"} default button "OK" with icon note`)
+}

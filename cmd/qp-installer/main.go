@@ -41,6 +41,20 @@ func main() {
 		return
 	}
 	var startName, startFolder string
+	if code == "" && agent.Installed() {
+		switch askInstalled() {
+		case "remove":
+			keep := askKeepFolder()
+			if err := agent.Uninstall(!keep); err != nil {
+				fail("some files could not be removed.", "")
+			}
+			removed(keep)
+			return
+		case "cancel":
+			os.Exit(0)
+		}
+		// "join": fall through and ask for a link
+	}
 	if code == "" {
 		if askStartOrJoin() { // start a new folder
 			startName = askText("What is your name?", "")

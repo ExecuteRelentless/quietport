@@ -75,3 +75,28 @@ func askText(prompt, def string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+func askInstalled() string {
+	// Yes = remove, No = use a new link, Cancel = cancel
+	r := msgbox("Quietport is already set up on this computer.\n\nYes: remove Quietport.\nNo: set it up again with a new link.", "Quietport", 0x3|mbIconInfo) // MB_YESNOCANCEL
+	switch r {
+	case idYes:
+		return "remove"
+	case 7: // IDNO
+		return "join"
+	}
+	return "cancel"
+}
+
+func askKeepFolder() bool {
+	r := msgbox("Keep your files in the QPSync folder? They will stop updating.\n\nYes: keep my files.\nNo: delete the folder too.", "Quietport", mbYesNo|0x30)
+	return r == idYes
+}
+
+func removed(keep bool) {
+	msg := "Quietport has been removed. Your files are still in the QPSync folder."
+	if !keep {
+		msg = "Quietport and the QPSync folder have been removed."
+	}
+	msgbox(msg, "Quietport", mbOK|mbIconInfo)
+}

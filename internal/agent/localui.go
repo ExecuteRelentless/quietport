@@ -25,19 +25,26 @@ import (
 const shareLinkName = "Share a folder"
 
 func shareLinkPath() string {
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		return filepath.Join(SyncRoot(), shareLinkName+".url")
+	case "darwin":
+		return filepath.Join(SyncRoot(), shareLinkName+".webloc")
+	default:
+		return filepath.Join(SyncRoot(), shareLinkName+".desktop")
 	}
-	return filepath.Join(SyncRoot(), shareLinkName+".webloc")
 }
 
 // writeShareLink (re)writes the shortcut for the current port and token.
 func writeShareLink(port int, token string) {
 	u := fmt.Sprintf("http://127.0.0.1:%d/?t=%s", port, token)
 	var body string
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		body = "[InternetShortcut]\r\nURL=" + u + "\r\n"
-	} else {
+	case "linux":
+		body = "[Desktop Entry]\nType=Link\nName=Share a folder\nIcon=folder-remote\nURL=" + u + "\n"
+	default:
 		body = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>URL</key><string>` + u + `</string></dict></plist>
@@ -88,6 +95,7 @@ button.quiet{background:#eef0f5;color:#0f1626}
 <div class="err" id="err" hidden></div>
 {{end}}
 </div>
+<p class="hint" style="margin-top:2rem"><a href="/remove?t={{.Token}}" style="color:#5b6478">Remove Quietport from this computer</a></p>
 </main>
 <script>
 const f=document.getElementById('f');
@@ -161,6 +169,29 @@ func (a *Agent) serveLocalUI(ctx context.Context, port int, token string) int {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"url": u})
 	})
+	mux.HandleFunc("GET /remove", func(w http.ResponseWriter, r *http.Request) {
+		if !check(w, r) {
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = removeTmpl.Execute(w, map[string]any{"Token": token, "Folder": SyncRoot()})
+	})
+	mux.HandleFunc("POST /remove", func(w http.ResponseWriter, r *http.Request) {
+		if !check(w, r) {
+			return
+		}
+		keep := r.FormValue("folder") != "delete"
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = removeTmpl.Execute(w, map[string]any{"Done": true, "Keep": keep, "Folder": SyncRoot()})
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		a.logf("uninstall requested from the local page (keep folder: %v)", keep)
+		go func() {
+			time.Sleep(1500 * time.Millisecond)
+			UninstallSelf(a.ts, !keep)
+		}()
+	})
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() { <-ctx.Done(); _ = srv.Close() }()
 	go func() { _ = srv.Serve(ln) }()
@@ -199,3 +230,25 @@ func (a *Agent) createInvite(ctx context.Context, circleID int64, name string) (
 	a.logf("invite created for circle %d (%s)", circleID, resp.Person)
 	return resp.URL + code, nil
 }
+
+var removeTmpl = template.Must(template.New("rm").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Remove Quietport</title>
+<style>
+body{margin:0;background:#f3f5f9;color:#0f1626;font:17px/1.5 "Instrument Sans","Helvetica Neue",Arial,sans-serif}
+main{max-width:34rem;margin:0 auto;padding:3rem 1.5rem}
+h1{font-size:1.9rem;letter-spacing:-.02em;margin:0 0 .4rem}
+p{margin:0 0 1rem;color:#5b6478}
+.card{background:#fff;border-radius:18px;padding:1.4rem;box-shadow:0 18px 40px rgba(15,22,38,.10),0 2px 6px rgba(15,22,38,.06)}
+.opt{display:flex;align-items:center;gap:.6rem;padding:.6rem .8rem;border:1px solid #dfe4ee;border-radius:12px;margin-bottom:.5rem;cursor:pointer}
+button{font:inherit;font-weight:600;background:#b42318;color:#fff;border:0;border-radius:999px;padding:.85rem 1.4rem;margin-top:1.1rem;cursor:pointer}
+a{color:#5b6478}
+</style></head><body><main>
+{{if .Done}}<h1>Quietport has been removed.</h1><p>{{if .Keep}}Your files are still in {{.Folder}}. They will not update any more.{{else}}The QPSync folder was deleted too.{{end}} You can close this page.</p>
+{{else}}<h1>Remove Quietport from this computer?</h1><p>Your shared folders stop updating on this computer. Other people's copies are not affected.</p>
+<div class="card"><form method="post" action="/remove">
+<input type="hidden" name="t" value="{{.Token}}">
+<label class="opt"><input type="radio" name="folder" value="keep" checked> Keep my files in {{.Folder}}</label>
+<label class="opt"><input type="radio" name="folder" value="delete"> Delete the QPSync folder too</label>
+<button type="submit">Remove Quietport</button>
+</form></div>
+<p style="margin-top:1.4rem"><a href="/?t={{.Token}}">Never mind, go back</a></p>{{end}}
+</main></body></html>`))

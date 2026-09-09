@@ -28,3 +28,27 @@ func askText(prompt, def string) string {
 	}
 	return s
 }
+
+func askInstalled() string {
+	fmt.Print("Quietport is already set up here. [r]emove it, use a new [l]ink, or [c]ancel? ")
+	s, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "r", "remove":
+		return "remove"
+	case "l", "link":
+		return "join"
+	}
+	return "cancel"
+}
+func askKeepFolder() bool {
+	fmt.Print("Keep your files in ~/QPSync? [Y/n] ")
+	s, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	return !strings.HasPrefix(strings.ToLower(strings.TrimSpace(s)), "n")
+}
+func removed(keep bool) {
+	if keep {
+		fmt.Println("Quietport has been removed. Your files are still in ~/QPSync.")
+	} else {
+		fmt.Println("Quietport and ~/QPSync have been removed.")
+	}
+}

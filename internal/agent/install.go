@@ -224,6 +224,7 @@ func unregisterStartup() error {
 		_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
 		return os.Remove(plistPath())
 	case "windows":
+		_ = exec.Command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "Quietport", "/f").Run()
 		return exec.Command("schtasks", "/Delete", "/TN", "Quietport", "/F").Run()
 	default:
 		_ = exec.Command("systemctl", "--user", "disable", "--now", "quietport.service").Run()
@@ -347,4 +348,65 @@ func unpinFolder(p string) {
 		hideWindow(cmd)
 		_ = cmd.Run()
 	}
+}
+
+// UninstallSelf is the version run by the agent itself (from the "Remove Quietport" page). It cannot call
+// stopRunningAgent (that would kill this process before the work is done), so it removes everything first and
+// hands its own job to launchd/systemd at the very end.
+func UninstallSelf(ts *TS, removeFolder bool) {
+	if ts != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ts.Logout(ctx)
+		cancel()
+	}
+	_ = unregisterStartupFiles()
+	unpinFolder(SyncRoot())
+	removeShareLink()
+	_ = cred.Destroy(AppDir(), ServiceName)
+	if removeFolder {
+		_ = os.RemoveAll(SyncRoot())
+	}
+	if runtime.GOOS == "windows" {
+		_ = exec.Command("taskkill", "/IM", "tailscaled.exe", "/F").Run()
+		cmd := exec.Command("cmd", "/c", "ping 127.0.0.1 -n 3 >nul & rmdir /s /q \""+AppDir()+"\"")
+		hideWindow(cmd)
+		_ = cmd.Start()
+		os.Exit(0)
+	}
+	entries, _ := os.ReadDir(AppDir())
+	for _, e := range entries {
+		_ = os.RemoveAll(filepath.Join(AppDir(), e.Name()))
+	}
+	_ = os.RemoveAll(AppDir())
+	switch runtime.GOOS {
+	case "darwin":
+		// bootout kills this process; everything is already gone
+		_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
+	default:
+		_ = exec.Command("systemctl", "--user", "stop", "quietport.service").Start()
+	}
+	os.Exit(0)
+}
+
+// unregisterStartupFiles removes the startup entry without stopping the running job.
+func unregisterStartupFiles() error {
+	switch runtime.GOOS {
+	case "darwin":
+		return os.Remove(plistPath())
+	case "windows":
+		_ = exec.Command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "Quietport", "/f").Run()
+		return exec.Command("schtasks", "/Delete", "/TN", "Quietport", "/F").Run()
+	default:
+		_ = exec.Command("systemctl", "--user", "disable", "quietport.service").Run()
+		return os.Remove(filepath.Join(home(), ".config", "systemd", "user", "quietport.service"))
+	}
+}
+
+// Installed reports whether this account has a working Quietport install.
+func Installed() bool {
+	b, err := os.ReadFile(ConfigPath())
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(b), `"device_id"`) && !strings.Contains(string(b), `"device_id": 0,`)
 }

@@ -30,7 +30,7 @@ for a in arm64 amd64; do
 done
 
 echo "== client bundles"
-for t in "darwin arm64 osx-arm64" "darwin amd64 osx-amd64" "windows amd64 windows-amd64"; do
+for t in "darwin arm64 osx-arm64" "darwin amd64 osx-amd64" "windows amd64 windows-amd64" "linux amd64 linux-amd64" "linux arm64 linux-arm64"; do
   os=$(echo $t | cut -d' ' -f1); arch=$(echo $t | cut -d' ' -f2); rcl=$(echo $t | cut -d' ' -f3)
   D="$OUT/client-$os-$arch"; rm -rf "$D"; mkdir -p "$D"
   build $os $arch "$D"
