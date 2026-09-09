@@ -470,6 +470,22 @@ func (a *Agent) applyBundle(ctx context.Context, b model.ConfigBundle) {
 					changed = true
 				}
 				gen := cs.Generation
+				if cs.DisplayName != "" && cs.DisplayName != cc.DisplayName {
+					// the operator renamed the circle: move the folder so nothing is downloaded twice
+					oldDir, newDir := CircleDir(cs.DisplayName), CircleDir(cc.DisplayName)
+					if a.watcher != nil {
+						a.watcher.RemoveRoot(oldDir)
+					}
+					if _, err := os.Stat(newDir); os.IsNotExist(err) {
+						if err := os.Rename(oldDir, newDir); err != nil {
+							a.logf("%s: could not move folder %q to %q: %v", cc.Slug, cs.DisplayName, cc.DisplayName, err)
+						} else {
+							a.logf("%s: folder renamed to %q", cc.Slug, cc.DisplayName)
+						}
+					}
+					cs.Resync = true // bisync listings are keyed by path
+					changed = true
+				}
 				cs.CircleConfig = cc
 				cs.S3Sealed = s3
 				if cc.Generation != gen {
