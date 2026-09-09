@@ -250,6 +250,15 @@ func (h *Hub) invitePayload(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) download(w http.ResponseWriter, r *http.Request) {
 	name := filepath.Base(r.PathValue("file"))
+	// friendly names for the single-file installers (they ask for the invite link when no code is in the name)
+	switch name {
+	case "Quietport.dmg":
+		w.Header().Set("Content-Disposition", `attachment; filename="Quietport.dmg"`)
+		name = "quietport-installer-darwin.dmg"
+	case "Quietport.exe":
+		w.Header().Set("Content-Disposition", `attachment; filename="Quietport.exe"`)
+		name = "quietport-installer-windows-amd64.exe"
+	}
 	if !strings.HasPrefix(name, "quietport-") && name != "SHA256SUMS.signed" {
 		http.NotFound(w, r)
 		return
