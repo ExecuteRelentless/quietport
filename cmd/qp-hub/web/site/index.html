@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quietport</title>
 <meta name="description" content="Share a folder. Privately. Quietport puts a folder on the computers of the people you invite. Encrypted. No accounts, nothing to learn.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d1d1f'/%3E%3Cpath d='M9 22V10h8a4 4 0 0 1 0 8h-5' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27fb%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%270%27%20y2%3D%271%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%237cc0ff%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%232d84f0%27/%3E%3C/linearGradient%3E%3ClinearGradient%20id%3D%27ff%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%270%27%20y2%3D%271%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%23a9d6ff%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%233f95f5%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath%20d%3D%27M6%2016a4%204%200%200%201%204-4h13l4%205h27a4%204%200%200%201%204%204v29a4%204%200%200%201-4%204H10a4%204%200%200%201-4-4z%27%20fill%3D%27url%28%23fb%29%27/%3E%3Crect%20x%3D%276%27%20y%3D%2724%27%20width%3D%2752%27%20height%3D%2730%27%20rx%3D%274%27%20fill%3D%27url%28%23ff%29%27/%3E%3Cpath%20d%3D%27M39%2038v-4a7%207%200%200%201%2014%200v4%27%20fill%3D%27none%27%20stroke%3D%27%23f5f5f7%27%20stroke-width%3D%273.2%27%20stroke-linecap%3D%27round%27/%3E%3Crect%20x%3D%2735%27%20y%3D%2737%27%20width%3D%2722%27%20height%3D%2716%27%20rx%3D%274%27%20fill%3D%27%231d1d1f%27/%3E%3Ccircle%20cx%3D%2746%27%20cy%3D%2745%27%20r%3D%272.4%27%20fill%3D%27%23f5f5f7%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -29,50 +29,73 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font
 a{color:var(--link);text-decoration:none}
 a:hover{text-decoration:underline}
 a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.wrap{max-width:61rem;margin:0 auto;padding:0 1.4rem}
+.wrap{max-width:66rem;margin:0 auto;padding:0 1.5rem}
 h1,h2,h3{margin:0;letter-spacing:-.015em;line-height:1.08;text-wrap:balance}
-h1{font-size:clamp(2.6rem,6.5vw,4rem);font-weight:600}
-h2{font-size:clamp(2rem,4.6vw,2.8rem);font-weight:600}
+h1{font-size:clamp(2.8rem,7vw,4.6rem);font-weight:700;letter-spacing:-.032em;line-height:1.04}
+h1 .grad{background:linear-gradient(92deg,#0a84ff,#2fb0a3 60%,#34c759);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:clamp(2.1rem,4.8vw,3.1rem);font-weight:700;letter-spacing:-.028em}
 h3{font-size:1.35rem;font-weight:600}
 p{margin:0}
-.sub{font-size:clamp(1.15rem,2.2vw,1.55rem);line-height:1.3;color:var(--ink);font-weight:400;margin-top:.6rem}
+.sub{font-size:clamp(1.15rem,2.2vw,1.5rem);line-height:1.32;color:var(--ink-2);font-weight:400;margin:.9rem auto 0;max-width:38rem}
 .muted{color:var(--ink-2)}
 .center{text-align:center}
 .more{font-size:1.05rem}
 .more::after{content:" \203A";}
-.btn{display:inline-block;background:var(--btn);color:#fff;padding:.55rem 1.05rem;border-radius:999px;font-size:1rem;font-weight:500}
-.btn:hover{text-decoration:none;filter:brightness(1.08)}
+.btn{display:inline-block;background:linear-gradient(180deg,#1a8cff,#0071e3);color:#fff;padding:.7rem 1.3rem;border-radius:999px;font-size:1.02rem;font-weight:500;box-shadow:0 6px 18px rgba(0,113,227,.28),inset 0 1px 0 rgba(255,255,255,.25);transition:transform .2s ease,box-shadow .2s ease}
+.btn:hover{text-decoration:none;transform:translateY(-1px);box-shadow:0 10px 26px rgba(0,113,227,.34),inset 0 1px 0 rgba(255,255,255,.25)}
 
 /* nav */
-nav{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
-nav .wrap{display:flex;align-items:center;justify-content:space-between;height:52px;font-size:.8rem}
-nav .brand{color:var(--ink);font-weight:700;font-size:1.35rem;letter-spacing:-.02em;display:flex;align-items:center;gap:.5rem}
+nav{position:sticky;top:0;z-index:5;background:rgba(0,0,0,.82);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:52px;font-size:.8rem;letter-spacing:-.01em}
+nav .brand{color:#f5f5f7;font-weight:600;font-size:1.22rem;letter-spacing:-.02em;display:flex;align-items:center;gap:.55rem}
 nav .brand:hover{text-decoration:none}
-nav .logo{width:26px;height:26px;color:var(--ink)}
-nav .links{display:flex;gap:1.6rem}
-nav .links a{color:var(--ink);opacity:.85}
+nav .logo{width:30px;height:30px}
+nav .links{display:flex;gap:1.9rem}
+nav .links a{color:#f5f5f7;opacity:.8;transition:opacity .2s}
+nav .links a:hover{opacity:1;text-decoration:none}
 
 /* hero */
-.hero{padding:3.6rem 0 2.4rem}
+.hero{padding:4.4rem 0 2.8rem;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;left:50%;top:22rem;width:60rem;height:22rem;transform:translateX(-50%);background:radial-gradient(closest-side,rgba(10,132,255,.16),rgba(47,176,163,.08) 55%,transparent 75%);filter:blur(30px);pointer-events:none}
+.hero .wrap{position:relative}
 .hero .actions{display:flex;justify-content:center;gap:1.6rem;margin-top:1rem;flex-wrap:wrap;align-items:center}
-.stage{max-width:56rem;margin:2rem auto 0;background:var(--tile);border-radius:28px;padding:1.4rem 1.4rem 1.1rem}
+.stage{max-width:58rem;margin:2.6rem auto 0;background:var(--card);border-radius:22px;padding:0;box-shadow:0 30px 80px rgba(15,22,38,.16),0 0 0 .5px rgba(0,0,0,.08);overflow:hidden}
+.stage .bar{height:44px;display:flex;align-items:center;gap:.5rem;padding:0 1rem;background:linear-gradient(180deg,#f7f7f9,#ededf0);border-bottom:1px solid #dfe0e4}
+.stage .bar i{width:12px;height:12px;border-radius:50%;display:block}
+.stage .bar i:nth-child(1){background:#ff5f57}.stage .bar i:nth-child(2){background:#febc2e}.stage .bar i:nth-child(3){background:#28c840}
+.stage .bar span{margin-left:auto;margin-right:auto;font-size:.82rem;color:#6e6e73;font-weight:500}
+.stage .body{padding:1.6rem 1.8rem 1.1rem;background:linear-gradient(180deg,#fbfbfd,#f2f3f6)}
 .stage svg{width:100%;height:auto;display:block}
-.stage .cap{font-size:.95rem;color:var(--ink-2);text-align:center;margin-top:.5rem}
+.stage .cap{font-size:.95rem;color:var(--ink-2);text-align:center;margin-top:.6rem}
+
+/* animated folder lock in the header: the shackle lifts and swings open, then snaps shut with a small bounce */
+.folderlock{width:30px;height:30px;overflow:visible}
+.folderlock .shackle{transform-box:view-box;transform-origin:53px 38px;animation:shackle 7s cubic-bezier(.34,1.56,.64,1) infinite}
+.folderlock .lbody,.folderlock .keyhole{transform-box:view-box;transform-origin:46px 45px;animation:lockbody 7s ease-in-out infinite}
+.folderlock .keyhole{animation:keyhole 7s ease-in-out infinite}
+@keyframes shackle{0%,58%{transform:translateY(0) rotate(0)}64%{transform:translateY(-4px) rotate(0)}70%,80%{transform:translateY(-4px) rotate(-32deg)}86%{transform:translateY(-4px) rotate(0)}91%{transform:translateY(0) rotate(0)}100%{transform:translateY(0) rotate(0)}}
+@keyframes lockbody{0%,90%{transform:scale(1)}93%{transform:scale(1.12)}97%,100%{transform:scale(1)}}
+@keyframes keyhole{0%,90%{fill:#f5f5f7}93%,97%{fill:#34c759}100%{fill:#f5f5f7}}
+
+/* three crisp facts under the hero */
+.facts{list-style:none;padding:0;margin:1.7rem auto 0;display:flex;justify-content:center;gap:2.4rem;flex-wrap:wrap;font-size:.95rem;color:var(--ink-2)}
+.facts li{display:flex;align-items:center;gap:.5rem}
+.facts svg{width:20px;height:20px;fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 
 /* sections */
-section{padding:3.2rem 0}
+section{padding:4.2rem 0}
 section.alt{background:var(--bg-alt)}
-section.dark{background:#000;color:#f5f5f7;--card:#1d1d1f;--tile:#1d1d1f;--ink:#f5f5f7;--ink-2:#a1a1a6;--line:#424245;--accent:#2997ff;--accent-soft:#0e2a4a;--ok:#30d158;--ok-soft:#0f3a1f}
-.lede{max-width:38rem;margin:.6rem auto 0;font-size:1.15rem;color:var(--ink-2)}
+section.dark{background:radial-gradient(120% 90% at 50% 0%,#17171a,#000 70%);color:#f5f5f7;--card:#1d1d1f;--tile:#1d1d1f;--ink:#f5f5f7;--ink-2:#a1a1a6;--line:#3a3a3d;--accent:#2997ff;--accent-soft:#0e2a4a;--ok:#30d158;--ok-soft:#0f3a1f}
+.lede{max-width:38rem;margin:.8rem auto 0;font-size:1.2rem;line-height:1.45;color:var(--ink-2)}
 
 /* step tiles */
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1.8rem}
-.tile{background:var(--tile);border-radius:24px;padding:1.1rem;display:flex;flex-direction:column;gap:.9rem;min-width:0}
-.tile .vis{border-radius:16px;overflow:hidden;min-height:13rem;display:flex;flex-direction:column;justify-content:center}
-.tile h3{margin-top:.2rem}
-.tile p{color:var(--ink-2);font-size:.98rem}
-.tile .n{font-size:.78rem;font-weight:600;color:var(--ink-2);letter-spacing:.02em}
-.shot{background:var(--card);box-shadow:var(--shadow);border-radius:16px;overflow:hidden}
+.tile{background:linear-gradient(180deg,#fafafc,#f0f1f4);border-radius:30px;padding:1.3rem;display:flex;flex-direction:column;gap:1rem;min-width:0;box-shadow:inset 0 1px 0 #fff,0 0 0 .5px rgba(0,0,0,.05)}
+.tile .vis{border-radius:20px;overflow:hidden;min-height:13rem;display:flex;flex-direction:column;justify-content:center}
+.tile h3{margin-top:.2rem;font-size:1.5rem;letter-spacing:-.022em}
+.tile p{color:var(--ink-2);font-size:1rem;line-height:1.45}
+.tile .n{font-size:.74rem;font-weight:600;color:var(--accent);letter-spacing:.08em;text-transform:uppercase}
+.shot{background:var(--card);box-shadow:0 10px 30px rgba(0,0,0,.09),0 0 0 .5px rgba(0,0,0,.06);border-radius:18px;overflow:hidden}
 .shot img{display:block;width:100%;height:auto}
 .chip{display:block;background:#1d1d1f;color:#f5f5f7;font-family:var(--mono);font-size:.72rem;padding:.55rem .8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:pulse 4s ease-in-out infinite}
 .chip b{color:#2997ff;font-weight:500}
@@ -127,6 +150,8 @@ section.dark{background:#000;color:#f5f5f7;--card:#1d1d1f;--tile:#1d1d1f;--ink:#
 .faq details[open] summary::after{transform:rotate(45deg)}
 .faq p{color:var(--ink-2);padding:0 0 1.1rem;max-width:40rem}
 
+section.dark .tile,section.dark .dl .card{background:linear-gradient(180deg,#232326,#1a1a1d);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tile{background:linear-gradient(180deg,#1f1f22,#161618);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)} :root:not([data-theme="light"]) .stage .bar{background:linear-gradient(180deg,#2a2a2e,#202024);border-color:#333} :root:not([data-theme="light"]) .stage .body{background:linear-gradient(180deg,#1d1d20,#151517)} :root:not([data-theme="light"]) .dl .card{background:linear-gradient(180deg,#222226,#1a1a1d)}}
 /* circles board */
 /* circles explainer */
 .circles .intro{max-width:34rem;color:var(--ink-2)}
@@ -158,12 +183,12 @@ section.dark{background:#000;color:#f5f5f7;--card:#1d1d1f;--tile:#1d1d1f;--ink:#
 
 /* download */
 .dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;max-width:44rem;margin:1.8rem auto 0}
-.dl .card{background:var(--card);border-radius:24px;padding:1.6rem;text-align:center;box-shadow:var(--shadow)}
+.dl .card{background:linear-gradient(180deg,#fff,#f7f7fa);border-radius:30px;padding:2rem 1.6rem;text-align:center;box-shadow:0 12px 32px rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.05)}
 .dl .card h3{font-size:1.5rem}
 .dl .card .file{font-family:var(--mono);font-size:.9rem;color:var(--ink-2);margin:.4rem 0 .9rem}
 .ops{text-align:center;margin-top:1.4rem;font-size:.92rem;color:var(--ink-2)}
 .ops a{margin:0 .5rem}
-footer{border-top:1px solid var(--line);padding:1.2rem 0 2rem;font-size:.75rem;color:var(--ink-2)}
+footer{border-top:1px solid var(--line);padding:1.5rem 0 2.4rem;font-size:.75rem;color:#86868b;letter-spacing:-.01em}
 footer .wrap{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
 
 /* hero animation, 16s loop, both directions. Leg 1: your folder (96,90) -> server; leg 2: server -> their folder (504,90).
@@ -227,6 +252,7 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
   .folder,.finder .pin{opacity:1;transform:none}
   .dlg.d1{opacity:0}.dlg.d2{opacity:1;transform:none}.dlg-prog{opacity:0}
   .share .sa{opacity:0}.share .sb{opacity:1}
+  .folderlock .shackle,.folderlock .lbody,.folderlock .keyhole{animation:none}
   .p1,.p3{opacity:0}
   .p2{opacity:1;transform:translate(504px,90px)}.p2 .lock{opacity:0}.p2 .file{opacity:1}
   .p4{opacity:1;transform:translate(96px,90px)}.p4 .lock{opacity:0}.p4 .file{opacity:1}
@@ -234,13 +260,30 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
 </style>
 </head>
 <body>
-<nav><div class="wrap"><a class="brand" href="/"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor"/><circle cx="16" cy="16" r="7.5" fill="none" stroke="var(--bg)" stroke-width="2.6"/><path d="M16 23.5V29" stroke="var(--bg)" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="16" r="2.4" fill="var(--bg)"/></svg>Quietport</a><div class="links"><a href="#how">How it works</a><a href="#circles">Circles</a><a href="#download">Download</a><a href="#faq">Questions</a></div></div></nav>
+<nav><div class="wrap"><a class="brand" href="/"><svg class="logo folderlock" viewBox="0 0 64 64" aria-hidden="true">
+<defs>
+<linearGradient id="fb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc0ff"/><stop offset="1" stop-color="#2d84f0"/></linearGradient>
+<linearGradient id="ff" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9d6ff"/><stop offset="1" stop-color="#3f95f5"/></linearGradient>
+<linearGradient id="lb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3a3f"/><stop offset="1" stop-color="#141417"/></linearGradient>
+</defs>
+<path d="M6 16a4 4 0 0 1 4-4h13l4 5h27a4 4 0 0 1 4 4v29a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4z" fill="url(#fb)"/>
+<rect x="6" y="24" width="52" height="30" rx="4" fill="url(#ff)"/>
+<rect x="8" y="25" width="48" height="2" rx="1" fill="#fff" opacity=".55"/>
+<g class="lock">
+<path class="shackle" d="M39 38v-4a7 7 0 0 1 14 0v4" fill="none" stroke="#f5f5f7" stroke-width="3.2" stroke-linecap="round"/>
+<rect class="lbody" x="35" y="37" width="22" height="16" rx="4" fill="url(#lb)"/>
+<circle class="keyhole" cx="46" cy="45" r="2.4" fill="#f5f5f7"/>
+</g>
+</svg>Quietport</a><div class="links"><a href="#how">How it works</a><a href="#circles">Circles</a><a href="#download">Download</a><a href="#faq">Questions</a></div></div></nav>
 
 <section class="hero"><div class="wrap center">
-  <h1>Share a folder. Privately.</h1>
+  <h1>Share a folder. <span class="grad">Privately.</span></h1>
   <p class="sub">Quietport puts a folder on the computers of the people you invite. Everything in it is encrypted. No accounts, nothing to learn.</p>
   <div class="actions"><a class="btn" href="#download">Download</a><a class="more" href="#how">How it works</a></div>
+  <ul class="facts"><li><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Encrypted before it leaves</li><li><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>No accounts</li><li><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Just a folder</li></ul>
   <div class="stage" data-plx="0.05" data-plx-max="22">
+    <div class="bar"><i></i><i></i><i></i><span>QPSync</span></div>
+    <div class="body">
     <svg viewBox="0 0 600 190" role="img" aria-label="A file in your folder is locked, crosses the server as a locked package, and unlocks in the same folder on the other person's computer">
       <defs><linearGradient id="lap" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#eef1f7"/><stop offset="1" stop-color="#dfe4ee"/></linearGradient></defs>
       <!-- dashed links -->
@@ -294,6 +337,7 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
       </g>
     </svg>
     <p class="cap">Drop in a file, or they do. It is locked before it leaves either computer and unlocks only for the people in that folder.</p>
+    </div>
   </div>
 </div></section>
 
