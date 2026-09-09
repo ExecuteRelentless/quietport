@@ -14,8 +14,12 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      sign: ${{ steps.cfg.outputs.sign }}
     steps:
       - uses: actions/checkout@v4
+      - name: Is SignPath configured?
+        id: cfg
+        run: echo "sign=${{ secrets.SIGNPATH_API_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v5
         with: { go-version: "1.27" }
       - name: Versions
@@ -58,7 +62,7 @@ jobs:
             out/client/tailscale.exe
   sign:
     needs: build
-    if: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+    if: needs.build.outputs.sign == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Submit to SignPath
