@@ -13,15 +13,29 @@ a{color:var(--accent);text-underline-offset:3px}
 .brand{font-family:"Newsreader",Georgia,serif;font-size:1.2rem;color:var(--ink-2);margin-bottom:2.2rem}
 details{margin-top:2.5rem;color:var(--ink-2);font-size:.95rem}summary{cursor:pointer}
 details p{margin-top:.8rem}
+
+.btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;padding:.95rem 1.5rem;border-radius:999px;font-weight:700;font-size:1.05rem;margin:.4rem 0 1.4rem}
+.btn:hover{filter:brightness(1.08)}
+ol{padding-left:1.2rem;margin:0 0 1rem}ol li{margin-bottom:.5rem}
+.small{font-size:.92rem;color:var(--ink-2)}
 </style></head><body><main>
 <div class="brand">Quietport</div>
 <h1>{{.Operator}} has shared a private folder with you.</h1>
-{{if eq .OS "mac"}}<p>Open Terminal (press ⌘ and Space, type <b>Terminal</b>, press Return), paste the line below and press Return.</p><pre>{{.Mac1}}</pre>
+{{if and (eq .OS "mac") .MacApp}}
+<p>Download Quietport, then open it from your Downloads folder and click Continue.</p>
+<a class="btn" href="/j/{{.Code}}/QuietportInstaller.zip" download>Download for Mac</a>
+<p>When it says <b>Quietport is connected</b>, your shared folder is in the Finder sidebar.</p>
+{{else if and (eq .OS "win") .WinApp}}
+<p>Download Quietport, then open it from your Downloads folder and click OK.</p>
+<a class="btn" href="/j/{{.Code}}/Quietport-{{.Code}}.exe" download>Download for Windows</a>
+<p>If Windows shows a blue box first, click <b>More info</b> and then <b>Run anyway</b>. When it says <b>Quietport is connected</b>, your shared folder is in File Explorer.</p>
+{{else if eq .OS "mac"}}<p>Open Terminal (press ⌘ and Space, type <b>Terminal</b>, press Return), paste the line below and press Return.</p><pre>{{.Mac1}}</pre>
+<p>When it says <b>Quietport is connected.</b>, look for the QPSync folder in Finder.</p>
 {{else if eq .OS "win"}}<p>Open PowerShell (press the Windows key, type <b>PowerShell</b>, press Enter), paste the line below and press Enter.</p><pre>{{.Win1}}</pre>
+<p>When it says <b>Quietport is connected.</b>, look for the QPSync folder in File Explorer.</p>
 {{else}}<p>Open this link on the Mac or Windows computer where you want the folder to appear.</p>{{end}}
-<p>When it says <b>Quietport is connected.</b>, look for the QPSync folder in {{if eq .OS "win"}}File Explorer{{else}}Finder{{end}}.</p>
 <details><summary>Other options</summary>
-<p>Mac:</p><pre>{{.Mac1}}</pre><p>or <a href="/j/{{.Code}}/QuietportInstall.command">download the installer</a> (right-click it and choose Open).</p>
-<p>Windows:</p><pre>{{.Win1}}</pre><p>or <a href="/j/{{.Code}}/QuietportInstall.cmd">download the installer</a>.</p>
-<p>Questions: {{.Support}}</p></details>
+{{if .MacApp}}<p>Mac: <a href="/j/{{.Code}}/QuietportInstaller.zip">download the installer</a>, or paste this in Terminal:</p>{{else}}<p>Mac, paste this in Terminal:</p>{{end}}<pre>{{.Mac1}}</pre>
+{{if .WinApp}}<p>Windows: <a href="/j/{{.Code}}/Quietport-{{.Code}}.exe">download the installer</a>, or paste this in PowerShell:</p>{{else}}<p>Windows, paste this in PowerShell:</p>{{end}}<pre>{{.Win1}}</pre>
+<p class="small">The link works once and expires after 24 hours. Questions: {{.Support}}</p></details>
 </main></body></html>

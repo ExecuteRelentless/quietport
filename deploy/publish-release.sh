@@ -5,7 +5,13 @@ set -euo pipefail
 V="${1:?version}"
 mv /tmp/quietport-*-"$V".* /var/lib/quietport/releases/ 2>/dev/null || true
 mv /tmp/quietport-hub-linux-*.tar.gz /tmp/quietport-operator-darwin-*.tar.gz /tmp/SHA256SUMS.signed /var/lib/quietport/releases/ 2>/dev/null || true
-chown quietport:quietport /var/lib/quietport/releases/*
+if [ -f /tmp/quietport-installer-darwin.tar.gz ]; then
+  rm -rf /var/lib/quietport/releases/installer && mkdir -p /var/lib/quietport/releases/installer
+  tar xzf /tmp/quietport-installer-darwin.tar.gz -C /var/lib/quietport/releases/installer 2>/dev/null
+  mv /tmp/quietport-installer-darwin.tar.gz /var/lib/quietport/releases/
+fi
+[ -f /tmp/quietport-installer-windows-amd64.exe ] && mv /tmp/quietport-installer-windows-amd64.exe /var/lib/quietport/releases/
+chown -R quietport:quietport /var/lib/quietport/releases
 ENV=$(cat /etc/quietport/hub.env | xargs)
 while read -r sha file sig; do
   case "$file" in

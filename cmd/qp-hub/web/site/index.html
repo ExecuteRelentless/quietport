@@ -61,23 +61,30 @@ p{margin:0 0 1rem}
 .step p{color:var(--ink-2);max-width:26rem}
 .shot{background:var(--card);border-radius:20px;box-shadow:var(--shadow);overflow:hidden;position:relative}
 .shot img{display:block;width:100%;height:auto}
-.chip{position:absolute;left:5%;bottom:9%;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:.78rem;padding:.55rem .8rem;border-radius:10px;box-shadow:var(--shadow);animation:float 4s ease-in-out infinite}
+.chip{position:absolute;right:4%;top:6%;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:.78rem;padding:.55rem .8rem;border-radius:10px;box-shadow:var(--shadow);animation:float 4s ease-in-out infinite;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip b{color:var(--accent);font-weight:500}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 
-/* terminal */
-.term{background:#15181f;color:#e6e9ef;font-family:var(--mono);font-size:.9rem;line-height:1.6;padding:1.1rem 1.25rem 1.3rem;border-radius:20px;box-shadow:var(--shadow);min-height:11rem}
-.term .bar{display:flex;gap:.45rem;margin-bottom:.9rem}
-.term .bar i{width:11px;height:11px;border-radius:50%;background:#3a3f4b;display:block}
-.term .bar i:nth-child(1){background:#ff5f57}.term .bar i:nth-child(2){background:#febc2e}.term .bar i:nth-child(3){background:#28c840}
-.term .line{white-space:nowrap;overflow:hidden}
-.term .prompt{color:#7f8797}
-.term .typed{display:inline-block;overflow:hidden;white-space:nowrap;vertical-align:bottom;max-width:0;border-right:2px solid #e6e9ef;animation:type 3.2s steps(46) .8s forwards, blink .9s step-end infinite}
-.term .out{opacity:0;color:#8ef0b0;animation:appear .5s ease 5.6s forwards}
-.term .out2{opacity:0;color:#7f8797;animation:appear .5s ease 6.4s forwards}
-@keyframes type{to{max-width:100%}}
-@keyframes blink{50%{border-color:transparent}}
-@keyframes appear{to{opacity:1}}
+/* installer dialog animation: ask (0-35%) -> progress (35-60%) -> connected (60-100%) on a 9s loop */
+.dlg-stage{position:relative;background:linear-gradient(160deg,#dfe6f3,#eef1f7);border-radius:20px;box-shadow:var(--shadow);min-height:15rem;display:flex;align-items:center;justify-content:center;padding:1.5rem;overflow:hidden}
+.dlg{position:absolute;width:min(22rem,86%);background:#fff;color:#1d1d1f;border-radius:14px;padding:1.2rem 1.2rem 1rem;box-shadow:0 20px 50px rgba(15,22,38,.22);font-size:.92rem;line-height:1.4}
+.dlg b{display:block;font-weight:600;margin-bottom:.3rem}
+.dlg p{margin:0 0 .9rem;color:#5b6478;font-size:.86rem}
+.dlg-icon{width:2.2rem;height:2.2rem;border-radius:9px;background:var(--accent);margin-bottom:.7rem;position:relative}
+.dlg-icon::after{content:"";position:absolute;inset:.55rem;border:2px solid #fff;border-radius:3px}
+.dlg-icon.ok{background:var(--ok)}
+.dlg-icon.ok::after{inset:auto;left:.7rem;top:.45rem;width:.45rem;height:.9rem;border:0;border-right:2.5px solid #fff;border-bottom:2.5px solid #fff;border-radius:0;transform:rotate(45deg)}
+.dlg-btns{display:flex;justify-content:flex-end;gap:.5rem}
+.dlg-btns span{padding:.35rem .9rem;border-radius:7px;background:#eef0f5;font-size:.85rem}
+.dlg-btns .primary{background:var(--accent);color:#fff}
+.dlg.d1{animation:d1 9s ease-in-out infinite}
+.dlg.d2{animation:d2 9s ease-in-out infinite}
+.dlg-prog{position:absolute;bottom:2rem;width:min(16rem,70%);height:6px;border-radius:3px;background:rgba(15,22,38,.12);overflow:hidden;opacity:0;animation:progShow 9s linear infinite}
+.dlg-prog i{display:block;height:100%;width:0;background:var(--accent);animation:progFill 9s linear infinite}
+@keyframes d1{0%{opacity:0;transform:translateY(8px) scale(.98)}5%,30%{opacity:1;transform:none}36%,100%{opacity:0;transform:translateY(-6px) scale(.98)}}
+@keyframes d2{0%,60%{opacity:0;transform:translateY(8px) scale(.98)}66%,94%{opacity:1;transform:none}100%{opacity:0}}
+@keyframes progShow{0%,36%{opacity:0}38%,58%{opacity:1}60%,100%{opacity:0}}
+@keyframes progFill{0%,36%{width:0}58%{width:100%}100%{width:100%}}
 
 /* finder */
 .finder{background:#fff;border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
@@ -147,8 +154,8 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
 }
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
-  .folder,.finder .pin,.term .out,.term .out2{opacity:1;transform:none}
-  .term .typed{max-width:100%;border-right:0}
+  .folder,.finder .pin{opacity:1;transform:none}
+  .dlg.d1{opacity:0}.dlg.d2{opacity:1;transform:none}.dlg-prog{opacity:0}
   .pkt,.pkt-lock{opacity:0}
   .arrive{opacity:1}
 }
@@ -215,17 +222,16 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
   <h2>3 steps, no account.</h2>
 
   <div class="step">
-    <div><div class="n">Step 1</div><h3>Someone sends you a link.</h3><p>Every invite is made for 1 person and carries only the folders meant for them. It works once and expires after 24 hours.</p></div>
+    <div><div class="n">Step 1</div><h3>Someone sends you a link.</h3><p>Every invite is made for 1 person and carries only the folders meant for them. It works once and expires after 24 hours. The page has 1 button: Download.</p></div>
     <div class="shot"><img src="/assets/invite-page.png" width="1800" height="1040" alt="The invite page: a headline saying a private folder has been shared with you, and 1 line to paste"><div class="chip">https://quietport.app/j/<b>fbco4tqe5qh5wwfibe2oiuypfu</b></div></div>
   </div>
 
   <div class="step">
-    <div><div class="n">Step 2</div><h3>Paste 1 line.</h3><p>There is nothing to sign up for. You paste 1 line from your invite link and Quietport installs itself in less than 60 seconds. No administrator password, nothing outside your own user folder.</p></div>
-    <div class="term" role="img" aria-label="A terminal: the install line is typed, then it prints Quietport is connected.">
-      <div class="bar"><i></i><i></i><i></i></div>
-      <div class="line"><span class="prompt">$ </span><span class="typed">curl -fsSL https://quietport.app/j/fbco4tqe…/mac | sh</span></div>
-      <div class="out">Quietport is connected.</div>
-      <div class="out2">$ _</div>
+    <div><div class="n">Step 2</div><h3>Open it and click Continue.</h3><p>There is nothing to sign up for and nothing to type. You open the download from your Downloads folder, click Continue, and Quietport installs itself in less than 60 seconds. No administrator password, nothing outside your own user folder.</p></div>
+    <div class="dlg-stage" role="img" aria-label="An installer dialog asks to continue, then reports Quietport is connected.">
+      <div class="dlg d1"><div class="dlg-icon"></div><b>Quietport will set up your shared folder now.</b><p>It takes about a minute and needs no password.</p><div class="dlg-btns"><span>Cancel</span><span class="primary">Continue</span></div></div>
+      <div class="dlg d2"><div class="dlg-icon ok"></div><b>Quietport is connected.</b><p>Your shared folder is called QPSync and is pinned in the Finder sidebar.</p><div class="dlg-btns"><span>OK</span><span class="primary">Open Folder</span></div></div>
+      <div class="dlg-prog"><i></i></div>
     </div>
   </div>
 
