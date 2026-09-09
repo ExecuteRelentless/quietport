@@ -136,8 +136,15 @@ func writeHelpers() {
 	_ = os.WriteFile(filepath.Join(AppDir(), "qp"), []byte("#!/bin/sh\nexec \""+AgentBin()+"\" \"$@\"\n"), 0o755)
 }
 
-// Uninstall: FR-19.
+// Uninstall: FR-19. Logs the device out of the mesh first so the hub sees it go, then removes everything.
 func Uninstall(removeFolder bool) error {
+	if st, err := OpenStore(); err == nil {
+		if c := st.Config(); c.SocksPort != 0 {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			NewTS(c.SocksPort).Logout(ctx)
+			cancel()
+		}
+	}
 	stopRunningAgent()
 	_ = unregisterStartup()
 	unpinFolder(SyncRoot())
