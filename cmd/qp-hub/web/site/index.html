@@ -61,9 +61,9 @@ p{margin:0 0 1rem}
 .step p{color:var(--ink-2);max-width:26rem}
 .shot{background:var(--card);border-radius:20px;box-shadow:var(--shadow);overflow:hidden;position:relative}
 .shot img{display:block;width:100%;height:auto}
-.chip{position:absolute;right:4%;top:6%;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:.78rem;padding:.55rem .8rem;border-radius:10px;box-shadow:var(--shadow);animation:float 4s ease-in-out infinite;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{display:block;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:.78rem;padding:.65rem .9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:pulse 4s ease-in-out infinite}
 .chip b{color:var(--accent);font-weight:500}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.72}}
 
 /* installer dialog animation: ask (0-35%) -> progress (35-60%) -> connected (60-100%) on a 9s loop */
 .dlg-stage{position:relative;background:linear-gradient(160deg,#dfe6f3,#eef1f7);border-radius:20px;box-shadow:var(--shadow);min-height:15rem;display:flex;align-items:center;justify-content:center;padding:1.5rem;overflow:hidden}
@@ -81,19 +81,19 @@ p{margin:0 0 1rem}
 .dlg.d2{animation:d2 9s ease-in-out infinite}
 .dlg-prog{position:absolute;bottom:2rem;width:min(16rem,70%);height:6px;border-radius:3px;background:rgba(15,22,38,.12);overflow:hidden;opacity:0;animation:progShow 9s linear infinite}
 .dlg-prog i{display:block;height:100%;width:0;background:var(--accent);animation:progFill 9s linear infinite}
-@keyframes d1{0%{opacity:0;transform:translateY(8px) scale(.98)}5%,30%{opacity:1;transform:none}36%,100%{opacity:0;transform:translateY(-6px) scale(.98)}}
-@keyframes d2{0%,60%{opacity:0;transform:translateY(8px) scale(.98)}66%,94%{opacity:1;transform:none}100%{opacity:0}}
-@keyframes progShow{0%,36%{opacity:0}38%,58%{opacity:1}60%,100%{opacity:0}}
-@keyframes progFill{0%,36%{width:0}58%{width:100%}100%{width:100%}}
+@keyframes d1{0%,4%{opacity:0;transform:translateY(8px) scale(.98)}9%,32%{opacity:1;transform:none}37%,100%{opacity:0;transform:translateY(-6px) scale(.98)}}
+@keyframes d2{0%,62%{opacity:0;transform:translateY(8px) scale(.98)}67%,92%{opacity:1;transform:none}96%,100%{opacity:0;transform:translateY(-6px) scale(.98)}}
+@keyframes progShow{0%,38%{opacity:0}41%,58%{opacity:1}61%,100%{opacity:0}}
+@keyframes progFill{0%,40%{width:0}58%{width:100%}100%{width:100%}}
 
 /* finder */
 .finder{background:#fff;border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
 .finder img{display:block;width:100%;height:auto}
-.finder .pane{position:relative;height:13rem;background:#fff;padding:1.4rem 1.6rem;display:flex;gap:2rem;align-items:flex-start}
+.finder .pane{position:relative;height:14rem;background:#fff;padding:1.4rem 1.6rem 3.6rem;display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap}
 .folder{width:5.4rem;text-align:center;font-size:.85rem;color:#1d1d1f;opacity:0;transform:translateY(10px) scale(.9);animation:pop .6s cubic-bezier(.2,.8,.2,1) forwards}
 .folder svg{width:4.2rem;height:auto;display:block;margin:0 auto .35rem}
 .folder:nth-child(1){animation-delay:.6s}.folder:nth-child(2){animation-delay:1.5s}
-.finder .pin{position:absolute;right:1.4rem;top:1.3rem;background:var(--ok-soft);color:var(--ok);font-size:.8rem;font-weight:600;padding:.45rem .7rem;border-radius:999px;opacity:0;animation:appear .5s ease 2.4s forwards}
+.finder .pin{position:absolute;left:1.6rem;bottom:1.2rem;background:var(--ok-soft);color:var(--ok);font-size:.8rem;font-weight:600;padding:.45rem .7rem;border-radius:999px;opacity:0;animation:appear .5s ease 2.4s forwards}
 @keyframes pop{to{opacity:1;transform:none}}
 
 /* circles explainer */
@@ -223,7 +223,7 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
 
   <div class="step">
     <div><div class="n">Step 1</div><h3>Someone sends you a link.</h3><p>Every invite is made for 1 person and carries only the folders meant for them. It works once and expires after 24 hours. The page has 1 button: Download.</p></div>
-    <div class="shot"><img src="/assets/invite-page.png" width="1800" height="1040" alt="The invite page: a headline saying a private folder has been shared with you, and 1 line to paste"><div class="chip">https://quietport.app/j/<b>fbco4tqe5qh5wwfibe2oiuypfu</b></div></div>
+    <div class="shot"><div class="chip">https://quietport.app/j/<b>fbco4tqe5qh5wwfibe2oiuypfu</b></div><img src="/assets/invite-page.png" width="1800" height="1040" alt="The invite page: a headline saying a private folder has been shared with you, and a Download button"></div>
   </div>
 
   <div class="step">
