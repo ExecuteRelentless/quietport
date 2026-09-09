@@ -159,6 +159,27 @@ new one fails to start twice (`update.json` in the app dir records attempts). Th
 `~/Documents/Quietport/release-keys/release.key` on the operator's Mac. Losing it means agents can never update
 again without a reinstall; back it up with the circle keys.
 
+
+## Windows: Defender and SmartScreen
+
+The Windows installer and agent are unsigned Go binaries. Defender's heuristics can flag an unsigned program that
+carries a compressed payload and registers a startup task, and SmartScreen shows "Windows protected your PC" until the
+file has reputation. Since 0.1.11 the Windows binaries carry an icon, version information (company, product,
+description) and an application manifest, and are not symbol-stripped, which removes the cheapest heuristic signals.
+Two things finish the job, both outside this repo:
+
+1. **Code signing.** Cheapest routes in 2026: Azure Trusted Signing (about $10/month, identity validation once), or
+   SignPath's free tier for open source projects; a classic OV certificate from Certum or SSL.com also works.
+   Sign `quietport-installer-windows-amd64.exe`, `qpsync-agent.exe`, `tailscaled.exe` and `rclone.exe` in the bundle
+   with `signtool` (or the vendor's CLI) before publishing, and the SmartScreen prompt disappears once reputation builds.
+2. **False-positive report to Microsoft.** https://www.microsoft.com/en-us/wdsi/filesubmission (sign in with a
+   Microsoft account, "Software developer", upload the exe). Detections on clean files are usually lifted within 1 to
+   3 days and the cleared hash stops being flagged for everyone.
+
+Until then, a member on Windows can use the paste-a-line path from the invite page's "Other options" (PowerShell
+`irm … | iex`), which is not subject to the file download checks, or restore the file from Defender's quarantine and
+add an allow entry. Both are workarounds, not the fix.
+
 ## Support call: what to ask a member to run
 
 macOS: open Terminal and paste `"$HOME/Library/Application Support/Quietport/qp" status`
