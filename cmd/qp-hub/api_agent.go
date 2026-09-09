@@ -379,7 +379,7 @@ func (h *Hub) circlePeople(c model.Circle, dev model.Device) []model.CirclePerso
 	out := []model.CirclePerson{}
 	for _, m := range mems {
 		devs, _ := h.db.Devices(m.PersonID)
-		var act []model.Device
+		act := []model.Device{}
 		for _, d := range devs {
 			if d.Status == model.StatusActive {
 				act = append(act, d)

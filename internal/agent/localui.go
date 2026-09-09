@@ -115,7 +115,7 @@ const T={{.Token}};
 async function loadPeople(box){const cid=box.dataset.circle;const r=await fetch('/people?t='+T+'&circle='+cid);const j=await r.json();
  if(!r.ok){box.innerHTML='<p class="hint">'+(j.error||'Could not load')+'</p>';return}
  box.innerHTML='';j.forEach(p=>{const row=document.createElement('div');row.className='opt';row.style.justifyContent='space-between';
-  row.innerHTML='<span>'+p.name.replace(/-[a-z2-7]{4}$/,'')+(p.self?' (you)':'')+' <small style="color:#5b6478">'+p.devices.length+' computer'+(p.devices.length==1?'':'s')+'</small></span>';
+  row.innerHTML='<span>'+p.name.replace(/-[a-z2-7]{4}$/,'')+(p.self?' (you)':'')+' <small style="color:#5b6478">'+(p.devices||[]).length+' computer'+((p.devices||[]).length==1?'':'s')+'</small></span>';
   if(!p.self){const b=document.createElement('button');b.type='button';b.className='quiet';b.style.margin='0';b.style.padding='.4rem .8rem';b.textContent='Remove';
    b.onclick=async()=>{if(!confirm('Remove '+p.name.replace(/-[a-z2-7]{4}$/,'')+' from this folder? The folder gets a new key; this can take a while for big folders.'))return;b.disabled=true;b.textContent='Removing…';
     const fd=new FormData();fd.append('t',T);fd.append('circle',cid);fd.append('person',p.person_id);const rr=await fetch('/people/remove',{method:'POST',body:fd});const jj=await rr.json();

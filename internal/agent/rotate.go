@@ -58,6 +58,12 @@ func (a *Agent) removePerson(ctx context.Context, circleID, personID int64) (str
 	if err != nil {
 		return "", fmt.Errorf("removed, but the folder could not be re-keyed yet (%v). It will be retried; until then the old computer may still read new files", err)
 	}
+	// the switch also rotated the folder's storage credentials: fetch them now instead of at the next heartbeat
+	a.heartbeat(ctx)
+	select {
+	case a.syncNow <- cs.Slug:
+	default:
+	}
 	return fmt.Sprintf("Removed. The folder has a new key (took %s).", took.Round(time.Second)), nil
 }
 

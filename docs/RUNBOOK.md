@@ -87,6 +87,19 @@ true: nothing he already downloaded can be taken back.
 A stolen device, without offboarding the person: `qpctl device revoke <id> --confirm <id>`, then
 `qpctl circle rotate-key <slug> --confirm <slug>` for each circle listed in the output.
 
+
+## Folder owners removing people themselves
+
+A circle can have an owner (`qpctl circle set <slug> --owner <person>`; self-started folders are owned by their
+founder). The owner's Share a folder page lists the people in that folder with a Remove button. Removing someone
+drops their membership on the hub (and their mesh devices, if that was their last folder), then the owner's own
+computer re-keys the folder: new key, re-encryption through that computer, sealed grants for everyone still in, switch,
+old ciphertext purged. Audit shows `circle.remove-member` and `circle.rotate-key` by `device:<id>/<owner>`.
+
+After a device-driven rotation the operator keystore no longer has that folder's current key (`qpctl circle list`
+shows `missing!`), so `rotate-key`, `keys verify` and offboard-driven rotation are done by the owner's computer for
+that folder from then on, not by qpctl.
+
 ## Keys: export, split, verify
 
 ```
