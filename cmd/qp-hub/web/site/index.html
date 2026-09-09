@@ -45,8 +45,10 @@ p{margin:0}
 
 /* nav */
 nav{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
-nav .wrap{display:flex;align-items:center;justify-content:space-between;height:44px;font-size:.78rem}
-nav .brand{color:var(--ink);font-weight:600;font-size:.95rem}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:52px;font-size:.8rem}
+nav .brand{color:var(--ink);font-weight:700;font-size:1.35rem;letter-spacing:-.02em;display:flex;align-items:center;gap:.5rem}
+nav .brand:hover{text-decoration:none}
+nav .logo{width:26px;height:26px;color:var(--ink)}
 nav .links{display:flex;gap:1.6rem}
 nav .links a{color:var(--ink);opacity:.85}
 
@@ -147,23 +149,28 @@ section.dark{background:#000;color:#f5f5f7;--card:#1d1d1f;--tile:#1d1d1f;--ink:#
 footer{border-top:1px solid var(--line);padding:1.2rem 0 2rem;font-size:.75rem;color:var(--ink-2)}
 footer .wrap{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
 
-/* hero animation, 8s loop. Packet 1: your folder (96,90) -> just before the server (238,100).
-   Packet 2: just after the server (362,100) -> their folder (504,90). Nothing ever crosses the server box. */
-.p1{animation:p1 8s ease-in-out infinite}
-.p1 .file{animation:p1file 8s linear infinite}
-.p1 .lock{animation:p1lock 8s linear infinite}
-.led{animation:led 8s linear infinite}
-.p2{animation:p2 8s ease-in-out infinite}
-.p2 .lock{animation:p2lock 8s linear infinite}
-.p2 .file{animation:p2file 8s linear infinite}
-@keyframes p1{0%,3%{transform:translate(96px,90px);opacity:0}7%{opacity:1}34%{transform:translate(238px,100px);opacity:1}38%,100%{transform:translate(238px,100px);opacity:0}}
-@keyframes p1file{0%,18%{opacity:1}24%,100%{opacity:0}}
-@keyframes p1lock{0%,18%{opacity:0}24%,100%{opacity:1}}
-@keyframes led{0%,36%{opacity:.25}39%,45%{opacity:1}48%,100%{opacity:.25}}
-@keyframes p2{0%,44%{transform:translate(362px,100px);opacity:0}48%{opacity:1}74%{transform:translate(504px,90px);opacity:1}92%{transform:translate(504px,90px);opacity:1}97%,100%{transform:translate(504px,90px);opacity:0}}
-@keyframes p2lock{0%,62%{opacity:1}68%,100%{opacity:0}}
-@keyframes p2file{0%,62%{opacity:0}68%,100%{opacity:1}}
-
+/* hero animation, 16s loop, both directions. Leg 1: your folder (96,90) -> server; leg 2: server -> their folder (504,90).
+   Leg 3: their folder -> server; leg 4: server -> your folder. Packets stop short of the server box on every leg. */
+.p1,.p2,.p3,.p4{animation-duration:16s;animation-iteration-count:infinite;animation-timing-function:ease-in-out}
+.p1{animation-name:p1}.p2{animation-name:p2}.p3{animation-name:p3}.p4{animation-name:p4}
+.p1 .file{animation:p1file 16s linear infinite}.p1 .lock{animation:p1lock 16s linear infinite}
+.p2 .lock{animation:p2lock 16s linear infinite}.p2 .file{animation:p2file 16s linear infinite}
+.p3 .file{animation:p3file 16s linear infinite}.p3 .lock{animation:p3lock 16s linear infinite}
+.p4 .lock{animation:p4lock 16s linear infinite}.p4 .file{animation:p4file 16s linear infinite}
+.led{animation:led 16s linear infinite}
+@keyframes p1{0%,2%{transform:translate(96px,90px);opacity:0}4%{opacity:1}17%{transform:translate(238px,100px);opacity:1}19%,100%{transform:translate(238px,100px);opacity:0}}
+@keyframes p1file{0%,9%{opacity:1}12%,100%{opacity:0}}
+@keyframes p1lock{0%,9%{opacity:0}12%,100%{opacity:1}}
+@keyframes p2{0%,22%{transform:translate(362px,100px);opacity:0}24%{opacity:1}37%{transform:translate(504px,90px);opacity:1}46%{transform:translate(504px,90px);opacity:1}48%,100%{transform:translate(504px,90px);opacity:0}}
+@keyframes p2lock{0%,31%{opacity:1}34%,100%{opacity:0}}
+@keyframes p2file{0%,31%{opacity:0}34%,100%{opacity:1}}
+@keyframes p3{0%,52%{transform:translate(504px,90px);opacity:0}54%{opacity:1}67%{transform:translate(362px,100px);opacity:1}69%,100%{transform:translate(362px,100px);opacity:0}}
+@keyframes p3file{0%,59%{opacity:1}62%,100%{opacity:0}}
+@keyframes p3lock{0%,59%{opacity:0}62%,100%{opacity:1}}
+@keyframes p4{0%,72%{transform:translate(238px,100px);opacity:0}74%{opacity:1}87%{transform:translate(96px,90px);opacity:1}96%{transform:translate(96px,90px);opacity:1}98%,100%{transform:translate(96px,90px);opacity:0}}
+@keyframes p4lock{0%,81%{opacity:1}84%,100%{opacity:0}}
+@keyframes p4file{0%,81%{opacity:0}84%,100%{opacity:1}}
+@keyframes led{0%,17%{opacity:.25}19%,23%{opacity:1}25%,67%{opacity:.25}69%,73%{opacity:1}75%,100%{opacity:.25}}
 
 @media (max-width:52rem){
   .tiles{grid-template-columns:1fr}
@@ -176,13 +183,14 @@ footer .wrap{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
   *{animation:none!important;transition:none!important}
   .folder,.finder .pin{opacity:1;transform:none}
   .dlg.d1{opacity:0}.dlg.d2{opacity:1;transform:none}.dlg-prog{opacity:0}
-  .p1{opacity:0}
+  .p1,.p3{opacity:0}
   .p2{opacity:1;transform:translate(504px,90px)}.p2 .lock{opacity:0}.p2 .file{opacity:1}
+  .p4{opacity:1;transform:translate(96px,90px)}.p4 .lock{opacity:0}.p4 .file{opacity:1}
 }
 </style>
 </head>
 <body>
-<nav><div class="wrap"><a class="brand" href="/">Quietport</a><div class="links"><a href="#how">How it works</a><a href="#circles">Circles</a><a href="#download">Download</a></div></div></nav>
+<nav><div class="wrap"><a class="brand" href="/"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="currentColor"/><circle cx="16" cy="16" r="7.5" fill="none" stroke="var(--bg)" stroke-width="2.6"/><path d="M16 23.5V29" stroke="var(--bg)" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="16" r="2.4" fill="var(--bg)"/></svg>Quietport</a><div class="links"><a href="#how">How it works</a><a href="#circles">Circles</a><a href="#download">Download</a></div></div></nav>
 
 <section class="hero"><div class="wrap center">
   <h1>A shared folder no one else can read.</h1>
@@ -225,13 +233,23 @@ footer .wrap{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
         <g class="file"><rect x="-12" y="-16" width="24" height="32" rx="3" fill="#fff" stroke="#8b93a5"/><path d="M-6 -6h12M-6 0h12M-6 6h7" stroke="#8b93a5" stroke-width="1.5"/></g>
         <g class="lock"><rect x="-12" y="-4" width="24" height="18" rx="4" fill="#0f1626"/><path d="M-7 -4v-4a7 7 0 0 1 14 0v4" fill="none" stroke="#0f1626" stroke-width="3"/><circle cx="0" cy="5" r="2.2" fill="#8ef0b0"/></g>
       </g>
+      <!-- packet 3: their file leaves their folder, becomes a lock before the server -->
+      <g class="p3">
+        <g class="file"><rect x="-12" y="-16" width="24" height="32" rx="3" fill="#fff" stroke="#8b93a5"/><path d="M-6 -6h12M-6 0h12M-6 6h7" stroke="#8b93a5" stroke-width="1.5"/></g>
+        <g class="lock"><rect x="-12" y="-4" width="24" height="18" rx="4" fill="#0f1626"/><path d="M-7 -4v-4a7 7 0 0 1 14 0v4" fill="none" stroke="#0f1626" stroke-width="3"/><circle cx="0" cy="5" r="2.2" fill="#8ef0b0"/></g>
+      </g>
+      <!-- packet 4: a lock leaves the server, becomes a file in your folder -->
+      <g class="p4">
+        <g class="lock"><rect x="-12" y="-4" width="24" height="18" rx="4" fill="#0f1626"/><path d="M-7 -4v-4a7 7 0 0 1 14 0v4" fill="none" stroke="#0f1626" stroke-width="3"/><circle cx="0" cy="5" r="2.2" fill="#8ef0b0"/></g>
+        <g class="file"><rect x="-12" y="-16" width="24" height="32" rx="3" fill="#fff" stroke="#8b93a5"/><path d="M-6 -6h12M-6 0h12M-6 6h7" stroke="#8b93a5" stroke-width="1.5"/></g>
+      </g>
       <!-- packet 2: a lock leaves the server, becomes a file in their folder -->
       <g class="p2">
         <g class="lock"><rect x="-12" y="-4" width="24" height="18" rx="4" fill="#0f1626"/><path d="M-7 -4v-4a7 7 0 0 1 14 0v4" fill="none" stroke="#0f1626" stroke-width="3"/><circle cx="0" cy="5" r="2.2" fill="#8ef0b0"/></g>
         <g class="file"><rect x="-12" y="-16" width="24" height="32" rx="3" fill="#fff" stroke="#8b93a5"/><path d="M-6 -6h12M-6 0h12M-6 6h7" stroke="#8b93a5" stroke-width="1.5"/></g>
       </g>
     </svg>
-    <p class="cap">Drop in a file. It is locked before it leaves your computer and unlocks only for the people in that folder.</p>
+    <p class="cap">Drop in a file, or they do. It is locked before it leaves either computer and unlocks only for the people in that folder.</p>
   </div>
 </div></section>
 
