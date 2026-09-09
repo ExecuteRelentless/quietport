@@ -40,6 +40,20 @@ Send the link however you normally talk to them. They paste one line, see `Quiet
 appear. You see `invite.retrieved` then `device.enrolled` in `qpctl logs sarah`. If the link expires or gets used
 before they run it, `qpctl invite revoke <prefix>` and make a new one.
 
+
+## Members inviting people themselves (no email, no account)
+
+Every QPSync folder contains a shortcut, **Share a folder**. It opens a page on the member's own computer (loopback,
+per-install token in the URL) with 1 form: pick a folder, type the person's name, get a link. The link is minted on the
+member's device: the circle key is sealed under the code there, the hub stores the hash and the sealed blob, creates a
+person record from the typed name (no email), a mesh user and a pre-auth key. Works once, 24 hours.
+
+- Who may do it: read/write members of a circle whose invite policy is `members` (the default). `qpctl circle set
+  <slug> --invites operator` restricts a circle to operator-made invites; `--readonly` members never can.
+- You see it: `qpctl audit` shows `invite.create` by `device:<id>/<inviter>`, `qpctl person list` shows the new person
+  as `<name>-xxxx` with no email, `qpctl logs <inviter>` shows `invite.created`.
+- Undo: `qpctl invite revoke <prefix>` before it is used; `qpctl offboard <person> --confirm <person>` after.
+
 ## Adding someone to another circle
 
 ```
