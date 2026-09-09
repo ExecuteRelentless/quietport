@@ -172,6 +172,32 @@ footer .wrap{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
 @keyframes p4file{0%,81%{opacity:0}84%,100%{opacity:1}}
 @keyframes led{0%,17%{opacity:.25}19%,23%{opacity:1}25%,67%{opacity:.25}69%,73%{opacity:1}75%,100%{opacity:.25}}
 
+/* scroll motion (adopted from the FoundMargin site): everything is gated behind body.anim, which JS adds only
+   when the visitor has not asked for reduced motion, so the static page is the fallback */
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body.anim .rv{opacity:0;transform:translateY(16px);transition:opacity .55s ease,transform .55s ease}
+body.anim .rv.in{opacity:1;transform:none}
+body.anim .hero > *{animation:rise .6s ease both}
+body.anim .hero > *:nth-child(2){animation-delay:.08s}
+body.anim .hero > *:nth-child(3){animation-delay:.16s}
+body.anim .hero > *:nth-child(4){animation-delay:.28s}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+body.anim .tile,body.anim .dl .card,body.anim .person{transition:transform .35s ease,box-shadow .35s ease}
+body.anim .tile:hover,body.anim .dl .card:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(0,0,0,.10)}
+body.anim [data-plx]{will-change:transform}
+/* the Finder folders pop in when their tile scrolls into view, not on page load */
+body.anim .folder{animation:none;opacity:0;transform:translateY(10px) scale(.9)}
+body.anim .rv.in .folder{animation:pop .6s cubic-bezier(.2,.8,.2,1) forwards}
+body.anim .finder .pin{animation:none;opacity:0}
+body.anim .rv.in .finder .pin{animation:appear .5s ease 2.4s forwards}
+body:not(.anim) .folder,body:not(.anim) .finder .pin{opacity:1;transform:none;animation:none}
+body.anim .board .person{opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease}
+body.anim .board.in .person{opacity:1;transform:none}
+body.anim .board.in .person:nth-child(2){transition-delay:.08s}
+body.anim .board.in .person:nth-child(3){transition-delay:.16s}
+body.anim .board.in .person:nth-child(4){transition-delay:.24s}
+
 @media (max-width:52rem){
   .tiles{grid-template-columns:1fr}
   .board{grid-template-columns:1fr}
@@ -196,7 +222,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
   <h1>A shared folder no one else can read.</h1>
   <p class="sub">Quietport puts a folder on the computers of the people you invite. Everything is encrypted before it goes anywhere, so the server in the middle never sees a thing.</p>
   <div class="actions"><a class="btn" href="#download">Download</a><a class="more" href="#how">How it works</a></div>
-  <div class="stage">
+  <div class="stage" data-plx="0.05" data-plx-max="22">
     <svg viewBox="0 0 600 190" role="img" aria-label="A file in your folder is locked, crosses the server as a locked package, and unlocks in the same folder on the other person's computer">
       <defs><linearGradient id="lap" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#eef1f7"/><stop offset="1" stop-color="#dfe4ee"/></linearGradient></defs>
       <!-- dashed links -->
@@ -311,5 +337,31 @@ footer .wrap{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
 </div></section>
 
 <footer><div class="wrap"><span>Built with ❤️ in San Francisco</span><span>Quietport 0.1.5</span></div></footer>
+<script>
+(function(){
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  document.body.classList.add("anim");
+  var els = Array.prototype.slice.call(document.querySelectorAll("section .center, .tile, .board, .dl .card, .ops, .lede.center"));
+  els.forEach(function(el){
+    el.classList.add("rv");
+    var i = el.parentNode ? Array.prototype.indexOf.call(el.parentNode.children, el) : 0;
+    el.style.transitionDelay = (i % 4) * 90 + "ms";
+  });
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(en){ if (!en.isIntersecting) return; en.target.classList.add("in"); io.unobserve(en.target); });
+  }, { threshold: 0.15, rootMargin: "0px 0px -6% 0px" });
+  els.forEach(function(el){ io.observe(el); });
+  var plx = Array.prototype.slice.call(document.querySelectorAll("[data-plx]")).map(function(el){
+    return { el: el, speed: parseFloat(el.getAttribute("data-plx")) || 0, max: parseFloat(el.getAttribute("data-plx-max")) || 24 };
+  });
+  var ticking = false;
+  function frame(){
+    ticking = false;
+    var y = window.scrollY || 0;
+    plx.forEach(function(p){ var d = Math.max(-p.max, Math.min(p.max, y * p.speed)); p.el.style.transform = "translateY(" + (-d).toFixed(1) + "px)"; });
+  }
+  window.addEventListener("scroll", function(){ if (!ticking) { ticking = true; requestAnimationFrame(frame); } }, { passive: true });
+})();
+</script>
 </body>
 </html>
