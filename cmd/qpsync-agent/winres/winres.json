@@ -2,7 +2,7 @@
   "RT_GROUP_ICON": {
     "APP": {
       "0000": [
-        "../../../installers/app.ico"
+        "../../../installers/app-512.png"
       ]
     }
   },
