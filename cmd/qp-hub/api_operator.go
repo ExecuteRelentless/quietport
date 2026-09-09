@@ -97,6 +97,7 @@ func (h *Hub) opPersonAdd(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "name must be lowercase letters, digits and dashes (it becomes the mesh user name)")
 		return
 	}
+	// email is optional: it is only a note for the operator, nothing is ever sent to it
 	uid, err := h.hs.UserCreate(in.Name)
 	if err != nil {
 		writeErr(w, 500, err.Error())
@@ -231,10 +232,10 @@ func (h *Hub) opPersonOffboard(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) opCircleCreate(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Slug, Name, Mode, BwLimit string
-		Quota                     int64
-		Retention                 int
-		Excludes                  []string
+		Slug, Name, Mode, BwLimit, Invites string
+		Quota                              int64
+		Retention                          int
+		Excludes                           []string
 	}
 	if err := readJSON(r, &in); err != nil || !slugRe.MatchString(in.Slug) || in.Name == "" {
 		writeErr(w, 400, "slug must be lowercase letters, digits and dashes; name is required")
@@ -255,7 +256,7 @@ func (h *Hub) opCircleCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "storage key: "+err.Error())
 		return
 	}
-	c, err := h.db.CircleCreate(model.Circle{Slug: in.Slug, DisplayName: in.Name, BucketPrefix: bucket, QuotaBytes: in.Quota, SyncMode: in.Mode, VersionRetentionDays: in.Retention, Excludes: in.Excludes, BwLimit: in.BwLimit}, k.AccessKeyID, k.SecretAccessKey)
+	c, err := h.db.CircleCreate(model.Circle{Slug: in.Slug, DisplayName: in.Name, BucketPrefix: bucket, QuotaBytes: in.Quota, SyncMode: in.Mode, VersionRetentionDays: in.Retention, Excludes: in.Excludes, BwLimit: in.BwLimit, InvitePolicy: in.Invites}, k.AccessKeyID, k.SecretAccessKey)
 	if err != nil {
 		_ = h.gar.KeyDelete(k.AccessKeyID)
 		_ = h.gar.BucketDelete(b.ID)
@@ -320,6 +321,7 @@ func (h *Hub) opCircleUpdate(w http.ResponseWriter, r *http.Request) {
 	set("retention", &c.VersionRetentionDays)
 	set("excludes", &c.Excludes)
 	set("bwlimit", &c.BwLimit)
+	set("invites", &c.InvitePolicy)
 	if set("quota", &c.QuotaBytes) && h.gar != nil {
 		if bi, err := h.gar.BucketInfo(c.BucketPrefix); err == nil {
 			if err := h.gar.BucketSetQuota(bi.ID, c.QuotaBytes); err != nil {

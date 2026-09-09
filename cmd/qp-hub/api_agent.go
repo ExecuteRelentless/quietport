@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +46,7 @@ func (h *Hub) routesAgent(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/enrol", h.handleEnrol)
 	mux.HandleFunc("POST /v1/heartbeat", h.withDevice(h.handleHeartbeat))
 	mux.HandleFunc("GET /v1/update/{os}/{arch}", h.withDevice(h.handleUpdateDownload))
+	mux.HandleFunc("POST /v1/invites", h.withDevice(h.handleDeviceInvite))
 	mux.HandleFunc("GET /v1/ping", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"ok": true, "time": time.Now().UTC()}) })
 }
 
@@ -196,7 +199,7 @@ func (h *Hub) configBundle(person model.Person, dev model.Device) (model.ConfigB
 		ak, sk, _ := h.db.CircleS3(c.ID)
 		cc := model.CircleConfig{ID: c.ID, Slug: c.Slug, DisplayName: c.DisplayName, Bucket: c.BucketPrefix, Generation: c.Generation,
 			SyncMode: c.SyncMode, Role: m.Role, QuotaBytes: c.QuotaBytes, VersionRetentionDays: c.VersionRetentionDays, Excludes: c.Excludes, BwLimit: c.BwLimit,
-			S3AccessKey: ak, S3SecretKey: sk}
+			CanInvite: c.InvitePolicy != model.InviteByOperator && m.Role == "member", S3AccessKey: ak, S3SecretKey: sk}
 		if h.gar != nil {
 			if bi, err := h.gar.BucketInfo(c.BucketPrefix); err == nil {
 				cc.UsedBytes = bi.Bytes
@@ -260,3 +263,84 @@ func (h *Hub) checkOperator(r *http.Request) error {
 func logf(format string, a ...any) { log.Printf(format, a...) }
 
 var _ = hubdb.ErrNotFound
+
+var nameSlugRe = regexp.MustCompile(`[^a-z0-9]+`)
+
+// handleDeviceInvite: a member device invites someone to a circle it is in. No email, no account: the person record
+// is created from the name the inviter typed, the mesh user and pre-auth key are made here, and the circle key
+// arrives sealed under the code from the device (the hub keeps the hash only).
+func (h *Hub) handleDeviceInvite(w http.ResponseWriter, r *http.Request, dev model.Device) {
+	var req model.DeviceInviteRequest
+	if err := readJSON(r, &req); err != nil || req.CodeHash == "" || req.SealedKeys == "" || req.CircleID == 0 {
+		writeErr(w, 400, "bad request")
+		return
+	}
+	inviter, err := h.db.PersonByID(dev.PersonID)
+	if err != nil || inviter.Status != model.StatusActive {
+		writeErr(w, 403, "inviter not active")
+		return
+	}
+	c, err := h.db.CircleByID(req.CircleID)
+	if err != nil {
+		writeErr(w, 404, "no such circle")
+		return
+	}
+	if c.InvitePolicy == model.InviteByOperator {
+		writeErr(w, 403, "only the operator can invite people to this folder")
+		return
+	}
+	mems, _ := h.db.CirclesOf(inviter.ID)
+	allowed := false
+	for _, m := range mems {
+		if m.CircleID == c.ID && m.Role == "member" {
+			allowed = true
+		}
+	}
+	if !allowed {
+		writeErr(w, 403, "you are not a read/write member of this folder")
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = "guest"
+	}
+	if len(name) > 40 {
+		name = name[:40]
+	}
+	base := strings.Trim(nameSlugRe.ReplaceAllString(strings.ToLower(name), "-"), "-")
+	if base == "" {
+		base = "guest"
+	}
+	slug := base + "-" + strings.ToLower(cryptobox.NewInviteCode()[:4])
+	uid, err := h.hs.UserCreate(slug)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	p, err := h.db.PersonAdd(model.Person{Name: slug, Email: "", Household: inviter.Household, HSUser: slug, HSUserID: uid})
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	_ = h.db.MemberAdd(p.ID, c.ID, "member")
+	ttl, err := time.ParseDuration(req.TTL)
+	if err != nil || ttl <= 0 || ttl > 24*time.Hour {
+		ttl = 24 * time.Hour
+	}
+	pak, err := h.hs.PreAuthKeyCreate(p.HSUserID, ttl, nil)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	pakID, _ := pak.ID.Int64()
+	inv, err := h.db.InviteAdd(hubdb.InviteRow{Invite: model.Invite{CodeHash: req.CodeHash, PersonID: p.ID, CircleIDs: []int64{c.ID}, ExpiresAt: time.Now().Add(ttl), Prefix: req.Prefix},
+		PreAuthKey: pak.Key, PreAuthKeyID: pakID, SealedKeys: req.SealedKeys})
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	h.db.Audit("device:"+strconv.FormatInt(dev.ID, 10)+"/"+inviter.Name, "invite.create", p.Name, fmt.Sprintf("circle=%s by member; prefix=%s", c.Slug, inv.Prefix))
+	h.db.Event("invite.created", inviter.ID, dev.ID, fmt.Sprintf("%s invited %q to %s", inviter.Name, name, c.Slug))
+	_ = h.refreshPolicy()
+	writeJSON(w, 201, model.DeviceInviteResponse{URL: "https://" + h.cfg.Host + "/j/", ExpiresAt: inv.ExpiresAt, Person: p.Name})
+}

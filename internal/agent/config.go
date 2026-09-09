@@ -23,6 +23,8 @@ type Config struct {
 	SupportContact string `json:"support_contact"`
 	OperatorName   string `json:"operator_name"`
 	SocksPort      int    `json:"socks_port"`
+	UIPort         int    `json:"ui_port"`  // loopback port of the "Share a folder" page
+	UIToken        string `json:"ui_token"` // per-install token carried in the shortcut URL
 	SyncInterval   int    `json:"sync_interval_seconds"`
 	S3Endpoint     string `json:"s3_endpoint"`
 

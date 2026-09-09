@@ -79,6 +79,25 @@ func Run(ctx context.Context) error {
 	}
 	a.hub = hub
 
+	// the one member-facing control: the "Share a folder" shortcut and its loopback page
+	if cfg.UIToken == "" || cfg.UIPort == 0 {
+		_ = store.Update(func(c *Config) {
+			if c.UIToken == "" {
+				c.UIToken = cryptobox.NewToken()
+			}
+			if c.UIPort == 0 {
+				c.UIPort = FreePort()
+			}
+		})
+		cfg = store.Config()
+	}
+	if port := a.serveLocalUI(ctx, cfg.UIPort, cfg.UIToken); port != 0 {
+		if port != cfg.UIPort {
+			_ = store.Update(func(c *Config) { c.UIPort = port })
+		}
+		writeShareLink(port, cfg.UIToken)
+	}
+
 	a.watcher, err = NewWatcher(5 * time.Second)
 	if err != nil {
 		a.logf("watcher: %v", err)

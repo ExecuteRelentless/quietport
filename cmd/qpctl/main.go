@@ -69,11 +69,11 @@ func usage() {
 
   qpctl init --hub http://100.64.0.1:8443 --token <operator token> [--proxy socks5://127.0.0.1:PORT] [--operator name]
 
-  qpctl person add <name> --email <addr> [--household <name>]
+  qpctl person add <name> [--email <addr>] [--household <name>]      (members can also invite from their folder)
   qpctl person list | show <name> | remove <name> --confirm <name>
 
   qpctl circle create <slug> --name "Display Name" [--quota 50G] [--mode bidirectional|send-only|receive-only] [--retention 30] [--exclude pat]...
-  qpctl circle list | show <slug> | set <slug> [--quota 50G] [--mode m] [--retention d] [--bwlimit spec]
+  qpctl circle list | show <slug> | set <slug> [--quota 50G] [--mode m] [--retention d] [--bwlimit spec] [--invites members|operator]
   qpctl circle add-member <slug> <person> [--readonly] | remove-member <slug> <person>
   qpctl circle rotate-key <slug> --confirm <slug> [--yes]
   qpctl circle destroy <slug> --confirm <slug>
@@ -209,8 +209,8 @@ func cmdPerson(args []string) error {
 		hh := fs.String("household", "", "")
 		name, rest := firstArg(args[1:])
 		_ = fs.Parse(rest)
-		if name == "" || *email == "" {
-			return errors.New("usage: qpctl person add <name> --email <addr> [--household <name>]")
+		if name == "" {
+			return errors.New("usage: qpctl person add <name> [--email <addr>] [--household <name>]")
 		}
 		var p model.Person
 		if err := api.Post("/op/persons", map[string]string{"name": name, "email": *email, "household": *hh}, &p); err != nil {

@@ -41,19 +41,20 @@ func cmdCircle(args []string) error {
 		mode := fs.String("mode", model.ModeBidirectional, "bidirectional | send-only | receive-only")
 		ret := fs.Int("retention", model.DefaultRetention, "days to keep old versions")
 		bw := fs.String("bwlimit", "", "rclone bwlimit, e.g. 2M or a timetable \"08:00,1M 22:00,off\"")
+		inv := fs.String("invites", model.InviteByMembers, "who may create invite links: members (any read/write member, from their folder) | operator")
 		var ex stringList
 		fs.Var(&ex, "exclude", "exclusion pattern (repeatable)")
 		slug, rest := firstArg(args[1:])
 		_ = fs.Parse(rest)
 		if slug == "" || *name == "" {
-			return errors.New("usage: qpctl circle create <slug> --name \"Display Name\" [--quota 50G] [--mode bidirectional]")
+			return errors.New("usage: qpctl circle create <slug> --name \"Display Name\" [--quota 50G] [--mode bidirectional] [--invites members|operator]")
 		}
 		q, err := parseSize(*quota)
 		if err != nil {
 			return err
 		}
 		var c model.Circle
-		if err := api.Post("/op/circles", map[string]any{"slug": slug, "name": *name, "quota": q, "mode": *mode, "retention": *ret, "excludes": []string(ex), "bwlimit": *bw}, &c); err != nil {
+		if err := api.Post("/op/circles", map[string]any{"slug": slug, "name": *name, "quota": q, "mode": *mode, "retention": *ret, "excludes": []string(ex), "bwlimit": *bw, "invites": *inv}, &c); err != nil {
 			return err
 		}
 		// FR-49: the key is born here, on the operator's machine, and goes nowhere in plaintext
@@ -93,7 +94,7 @@ func cmdCircle(args []string) error {
 		if err := api.Get("/op/circles/"+slug, &c); err != nil {
 			return err
 		}
-		fmt.Printf("%s %q mode=%s generation=%d used=%s quota=%s retention=%dd bucket=%s\n", c.Slug, c.DisplayName, c.SyncMode, c.Generation, human(c.UsedBytes), quotaStr(c.QuotaBytes), c.VersionRetentionDays, c.BucketPrefix)
+		fmt.Printf("%s %q mode=%s generation=%d used=%s quota=%s retention=%dd invites=%s bucket=%s\n", c.Slug, c.DisplayName, c.SyncMode, c.Generation, human(c.UsedBytes), quotaStr(c.QuotaBytes), c.VersionRetentionDays, c.InvitePolicy, c.BucketPrefix)
 		if len(c.Excludes) > 0 {
 			fmt.Printf("  excludes: %v\n", c.Excludes)
 		}
@@ -112,6 +113,7 @@ func cmdCircle(args []string) error {
 		mode := fs.String("mode", "", "")
 		ret := fs.Int("retention", 0, "")
 		bw := fs.String("bwlimit", "\x00", "")
+		inv := fs.String("invites", "", "members | operator")
 		name := fs.String("name", "", "")
 		var ex stringList
 		fs.Var(&ex, "exclude", "")
@@ -136,6 +138,9 @@ func cmdCircle(args []string) error {
 		}
 		if *name != "" {
 			patch["name"] = *name
+		}
+		if *inv != "" {
+			patch["invites"] = *inv
 		}
 		if len(ex) > 0 {
 			patch["excludes"] = []string(ex)

@@ -56,6 +56,12 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 		c.AgentVersion = Version
 		c.HubAPI, c.LoginServer, c.SupportContact, c.OperatorName = p.HubAPI, p.LoginServer, p.SupportContact, p.OperatorName
 		c.SocksPort = port
+		if c.UIPort == 0 {
+			c.UIPort = FreePort()
+		}
+		if c.UIToken == "" {
+			c.UIToken = cryptobox.NewToken()
+		}
 		c.SyncInterval = model.DefaultSyncSeconds
 		c.DeviceKeysSealed = sealedKeys
 		c.PreAuthSealed = sealedPak
@@ -148,6 +154,7 @@ func Uninstall(removeFolder bool) error {
 	stopRunningAgent()
 	_ = unregisterStartup()
 	unpinFolder(SyncRoot())
+	removeShareLink()
 	_ = cred.Destroy(AppDir(), ServiceName)
 	if removeFolder {
 		_ = os.RemoveAll(SyncRoot())

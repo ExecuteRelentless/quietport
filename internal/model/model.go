@@ -40,6 +40,7 @@ type Circle struct {
 	VersionRetentionDays int       `json:"version_retention_days"`
 	Excludes             []string  `json:"excludes,omitempty"`
 	BwLimit              string    `json:"bwlimit,omitempty"` // rclone --bwlimit value or timetable
+	InvitePolicy         string    `json:"invite_policy"`     // members (any read/write member can invite) | operator
 	CreatedAt            time.Time `json:"created_at"`
 	// filled for show
 	Members []Membership `json:"members,omitempty"`
@@ -99,6 +100,7 @@ type CircleConfig struct {
 	VersionRetentionDays int      `json:"version_retention_days"`
 	Excludes             []string `json:"excludes,omitempty"`
 	BwLimit              string   `json:"bwlimit,omitempty"`
+	CanInvite            bool     `json:"can_invite"` // this member may create invite links for the circle
 	S3AccessKey          string   `json:"s3_access_key"`
 	S3SecretKey          string   `json:"s3_secret_key"`
 }
@@ -153,6 +155,23 @@ type EnrolRequest struct {
 	PubKey       string `json:"pubkey"`
 }
 
+// DeviceInviteRequest: a member device creates an invite for a circle it belongs to. The keys are sealed on the device
+// under the code; the hub receives only the hash and the sealed blob (same zero-knowledge shape as operator invites).
+type DeviceInviteRequest struct {
+	CircleID   int64  `json:"circle_id"`
+	Name       string `json:"name"` // what the inviter calls the person; no email, no account
+	CodeHash   string `json:"code_hash"`
+	Prefix     string `json:"prefix"`
+	SealedKeys string `json:"sealed_keys"`
+	TTL        string `json:"ttl"`
+}
+
+type DeviceInviteResponse struct {
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Person    string    `json:"person"`
+}
+
 type EnrolResponse struct {
 	DeviceID    int64        `json:"device_id"`
 	DeviceToken string       `json:"device_token"`
@@ -198,6 +217,8 @@ const (
 	ModeBidirectional  = "bidirectional"
 	ModeReceiveOnly    = "receive-only"
 	ModeSendOnly       = "send-only"
+	InviteByMembers    = "members"
+	InviteByOperator   = "operator"
 	DefaultRetention   = 30
 	HeartbeatInterval  = 5 * time.Minute
 	DefaultSyncSeconds = 60

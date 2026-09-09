@@ -115,3 +115,9 @@ func (c *HubClient) Download(ctx context.Context, u string) ([]byte, http.Header
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 400<<20))
 	return b, resp.Header, err
 }
+
+func (c *HubClient) CreateInvite(ctx context.Context, req model.DeviceInviteRequest) (model.DeviceInviteResponse, error) {
+	var out model.DeviceInviteResponse
+	err := c.do(ctx, "POST", "/v1/invites", req, &out)
+	return out, err
+}
