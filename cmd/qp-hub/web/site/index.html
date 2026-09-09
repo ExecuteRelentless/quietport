@@ -5,119 +5,267 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quietport</title>
 <meta name="description" content="A shared folder no one else can read. Invite only, encrypted before it leaves your machine, nothing to sign up for.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23111'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23ecebe6'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232457f5'/%3E%3Cpath d='M9 22V10h8a4 4 0 0 1 0 8h-5' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500&family=Instrument+Sans:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root{
-  --bg:#ecebe6; --panel:#e2e0d9; --ink:#131311; --ink-2:#67665f; --line:#cfcdc4; --accent:#5c6b4f; --on-accent:#f3f2ec;
+  --bg:#f3f5f9; --card:#ffffff; --ink:#0f1626; --ink-2:#5b6478; --line:#dfe4ee; --accent:#2457f5; --accent-soft:#e3eafe; --ok:#1f9d63; --ok-soft:#dcf5e8;
+  --fa:#3b82f6; --fb:#16a34a; --fc:#f59e0b;
+  --shadow:0 18px 40px rgba(15,22,38,.10), 0 2px 6px rgba(15,22,38,.06);
   --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
   --body:"Instrument Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",Menlo,Consolas,monospace;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){ --bg:#141412; --panel:#1d1d1a; --ink:#ecebe6; --ink-2:#a3a29a; --line:#33332e; --accent:#a9b995; --on-accent:#141412; color-scheme:dark; }
+  :root:not([data-theme="light"]){ --bg:#0f1420; --card:#171d2b; --ink:#eef1f7; --ink-2:#a5adbf; --line:#28304a; --accent:#7aa2ff; --accent-soft:#1d2a4d; --ok:#4ade80; --ok-soft:#153a2a; --shadow:0 18px 40px rgba(0,0,0,.45); color-scheme:dark; }
 }
-:root[data-theme="dark"]{ --bg:#141412; --panel:#1d1d1a; --ink:#ecebe6; --ink-2:#a3a29a; --line:#33332e; --accent:#a9b995; --on-accent:#141412; color-scheme:dark; }
+:root[data-theme="dark"]{ --bg:#0f1420; --card:#171d2b; --ink:#eef1f7; --ink-2:#a5adbf; --line:#28304a; --accent:#7aa2ff; --accent-soft:#1d2a4d; --ok:#4ade80; --ok-soft:#153a2a; --shadow:0 18px 40px rgba(0,0,0,.45); color-scheme:dark; }
+
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:18px;line-height:1.5}
 a{color:inherit}
 a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
-.wrap{max-width:60rem;margin:0 auto;padding:0 1.5rem}
+.wrap{max-width:66rem;margin:0 auto;padding:0 1.5rem}
 header .wrap{display:flex;justify-content:space-between;align-items:center;padding-top:1.4rem}
-.mark{font-family:var(--display);font-weight:500;font-size:1.15rem;letter-spacing:-.01em;text-decoration:none}
-header nav a{font-size:.95rem;color:var(--ink-2);text-decoration:none}
-header nav a:hover{color:var(--ink)}
+.mark{font-family:var(--display);font-weight:600;font-size:1.2rem;letter-spacing:-.02em;text-decoration:none}
+nav{display:flex;gap:1.4rem}
+nav a{font-size:.95rem;color:var(--ink-2);text-decoration:none}
+nav a:hover{color:var(--ink)}
+h1,h2,h3{font-family:var(--display);letter-spacing:-.03em;line-height:1;margin:0;text-wrap:balance}
+h1{font-weight:500;font-size:clamp(2.6rem,6.2vw,4.6rem)}
+h2{font-weight:500;font-size:clamp(2rem,4.4vw,3rem);margin-bottom:1rem}
+h3{font-weight:600;font-size:1.25rem;letter-spacing:-.02em}
+p{margin:0 0 1rem}
+.muted{color:var(--ink-2)}
+.btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;padding:.9rem 1.4rem;border-radius:999px;font-weight:600;font-size:1rem;transition:transform .15s ease, box-shadow .15s ease}
+.btn:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(36,87,245,.28)}
+.eyebrow{font-size:.8rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:.9rem}
 
-.hero{padding:6rem 0 4.5rem}
-h1{font-family:var(--display);font-weight:400;font-size:clamp(3rem,9.5vw,7.4rem);line-height:.95;letter-spacing:-.035em;margin:0 0 2rem;text-wrap:balance;max-width:11ch}
-.hero p{font-size:1.15rem;max-width:34rem;margin:0 0 2rem;color:var(--ink)}
-.btn{display:inline-block;background:var(--ink);color:var(--bg);text-decoration:none;padding:.85rem 1.4rem;border-radius:999px;font-weight:500;font-size:1rem}
-.btn:hover{background:var(--accent);color:var(--on-accent)}
+/* hero */
+.hero{padding:4.5rem 0 3rem}
+.hero .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:3rem;align-items:center}
+.hero p{font-size:1.15rem;max-width:30rem}
+.scene{background:var(--card);border-radius:28px;box-shadow:var(--shadow);padding:1.25rem;overflow:hidden}
+.scene svg{width:100%;height:auto;display:block}
+.scene-cap{font-size:.85rem;color:var(--ink-2);margin:.8rem .25rem 0}
 
-.facts{border-top:1px solid var(--line);margin:0;padding:0;list-style:none}
-.facts li{display:grid;grid-template-columns:minmax(0,14rem) 1fr;gap:1.5rem;padding:1.6rem 0;border-bottom:1px solid var(--line)}
-.facts b{font-family:var(--display);font-weight:500;font-size:1.35rem;letter-spacing:-.02em;line-height:1.15}
-.facts p{margin:0;max-width:34rem;color:var(--ink-2)}
-.facts p strong{color:var(--ink);font-weight:500}
+/* steps */
+.steps{padding:3.5rem 0}
+.step{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr);gap:2.5rem;align-items:center;padding:2.5rem 0;border-top:1px solid var(--line)}
+.step:first-of-type{border-top:0}
+.step .n{font-family:var(--display);font-weight:600;font-size:.95rem;color:var(--accent);margin-bottom:.6rem}
+.step h3{font-size:1.7rem;margin-bottom:.7rem}
+.step p{color:var(--ink-2);max-width:26rem}
+.shot{background:var(--card);border-radius:20px;box-shadow:var(--shadow);overflow:hidden;position:relative}
+.shot img{display:block;width:100%;height:auto}
+.chip{position:absolute;left:5%;bottom:9%;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:.78rem;padding:.55rem .8rem;border-radius:10px;box-shadow:var(--shadow);animation:float 4s ease-in-out infinite}
+.chip b{color:var(--accent);font-weight:500}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 
-.circles{padding:5.5rem 1.5rem 4rem;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:3rem;align-items:center}
-.circles h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,4.5vw,3.2rem);letter-spacing:-.03em;line-height:1;margin:0 0 1.2rem}
-.circles p{margin:0 0 1rem;max-width:30rem;color:var(--ink-2)}
-.circles p strong{color:var(--ink);font-weight:500}
-figure{margin:0;background:var(--panel);border-radius:24px;padding:1.25rem 1.25rem 1rem;display:flex;flex-direction:column;align-items:center;justify-content:center}
-figure svg{width:100%;height:auto;max-width:24rem}
-figcaption{font-size:.85rem;color:var(--ink-2);text-align:center;margin-top:.25rem}
+/* terminal */
+.term{background:#15181f;color:#e6e9ef;font-family:var(--mono);font-size:.9rem;line-height:1.6;padding:1.1rem 1.25rem 1.3rem;border-radius:20px;box-shadow:var(--shadow);min-height:11rem}
+.term .bar{display:flex;gap:.45rem;margin-bottom:.9rem}
+.term .bar i{width:11px;height:11px;border-radius:50%;background:#3a3f4b;display:block}
+.term .bar i:nth-child(1){background:#ff5f57}.term .bar i:nth-child(2){background:#febc2e}.term .bar i:nth-child(3){background:#28c840}
+.term .line{white-space:nowrap;overflow:hidden}
+.term .prompt{color:#7f8797}
+.term .typed{display:inline-block;overflow:hidden;white-space:nowrap;vertical-align:bottom;max-width:0;border-right:2px solid #e6e9ef;animation:type 3.2s steps(46) .8s forwards, blink .9s step-end infinite}
+.term .out{opacity:0;color:#8ef0b0;animation:appear .5s ease 5.6s forwards}
+.term .out2{opacity:0;color:#7f8797;animation:appear .5s ease 6.4s forwards}
+@keyframes type{to{max-width:100%}}
+@keyframes blink{50%{border-color:transparent}}
+@keyframes appear{to{opacity:1}}
 
-.download{padding:2rem 0 5rem}
-.download h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,4.5vw,3.2rem);letter-spacing:-.03em;line-height:1;margin:0 0 1rem}
-.download > .wrap > p{max-width:34rem;color:var(--ink-2);margin:0 0 2rem}
+/* finder */
+.finder{background:#fff;border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
+.finder img{display:block;width:100%;height:auto}
+.finder .pane{position:relative;height:13rem;background:#fff;padding:1.4rem 1.6rem;display:flex;gap:2rem;align-items:flex-start}
+.folder{width:5.4rem;text-align:center;font-size:.85rem;color:#1d1d1f;opacity:0;transform:translateY(10px) scale(.9);animation:pop .6s cubic-bezier(.2,.8,.2,1) forwards}
+.folder svg{width:4.2rem;height:auto;display:block;margin:0 auto .35rem}
+.folder:nth-child(1){animation-delay:.6s}.folder:nth-child(2){animation-delay:1.5s}
+.finder .pin{position:absolute;right:1.4rem;top:1.3rem;background:var(--ok-soft);color:var(--ok);font-size:.8rem;font-weight:600;padding:.45rem .7rem;border-radius:999px;opacity:0;animation:appear .5s ease 2.4s forwards}
+@keyframes pop{to{opacity:1;transform:none}}
+
+/* circles explainer */
+.circles{padding:3.5rem 0 2rem}
+.circles .intro{max-width:34rem;color:var(--ink-2)}
+.board{background:var(--card);border-radius:28px;box-shadow:var(--shadow);padding:1.75rem;margin-top:1.75rem;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:2rem;align-items:start}
+.legend{display:grid;gap:.75rem}
+.legend div{display:flex;align-items:center;gap:.75rem;padding:.75rem .9rem;border-radius:14px;border:1px solid var(--line);transition:background .4s,border-color .4s}
+.legend i{width:14px;height:14px;border-radius:50%;display:block;flex:none}
+.legend span{font-weight:600}
+.legend small{display:block;color:var(--ink-2);font-weight:400;font-size:.85rem}
+.people{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}
+.person{border:1px solid var(--line);border-radius:18px;padding:1rem .8rem;text-align:center}
+.avatar{width:2.6rem;height:2.6rem;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto .6rem;font-family:var(--display)}
+.person b{display:block;font-size:.95rem;margin-bottom:.7rem}
+.fold{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--ink-2);padding:.35rem .45rem;border-radius:9px;margin-bottom:.3rem;transition:background .4s,color .4s,transform .4s}
+.fold i{width:14px;height:11px;border-radius:3px;display:block;flex:none}
+.fold.none{border:1px dashed var(--line);justify-content:center;color:var(--ink-2)}
+.ca i{background:var(--fa)}.cb i{background:var(--fb)}.cc i{background:var(--fc)}
+/* 12s loop: A lit 0-33%, B 33-66%, C 66-100% */
+.legend .ca{animation:litA 12s infinite}.legend .cb{animation:litB 12s infinite}.legend .cc{animation:litC 12s infinite}
+.fold.ca{animation:foldA 12s infinite}.fold.cb{animation:foldB 12s infinite}.fold.cc{animation:foldC 12s infinite}
+@keyframes litA{0%,30%{background:color-mix(in srgb,var(--fa) 14%,transparent);border-color:var(--fa)}33%,100%{background:transparent;border-color:var(--line)}}
+@keyframes litB{0%,30%{background:transparent;border-color:var(--line)}33%,63%{background:color-mix(in srgb,var(--fb) 14%,transparent);border-color:var(--fb)}66%,100%{background:transparent;border-color:var(--line)}}
+@keyframes litC{0%,63%{background:transparent;border-color:var(--line)}66%,97%{background:color-mix(in srgb,var(--fc) 16%,transparent);border-color:var(--fc)}100%{background:transparent;border-color:var(--line)}}
+@keyframes foldA{0%,30%{background:color-mix(in srgb,var(--fa) 14%,transparent);color:var(--ink);transform:translateX(3px)}33%,100%{background:transparent;color:var(--ink-2);transform:none}}
+@keyframes foldB{0%,30%{background:transparent;color:var(--ink-2);transform:none}33%,63%{background:color-mix(in srgb,var(--fb) 14%,transparent);color:var(--ink);transform:translateX(3px)}66%,100%{background:transparent;color:var(--ink-2);transform:none}}
+@keyframes foldC{0%,63%{background:transparent;color:var(--ink-2);transform:none}66%,97%{background:color-mix(in srgb,var(--fc) 16%,transparent);color:var(--ink);transform:translateX(3px)}100%{background:transparent;color:var(--ink-2);transform:none}}
+.board-cap{grid-column:1/-1;font-size:.9rem;color:var(--ink-2);margin:0;padding-top:.5rem;border-top:1px solid var(--line)}
+
+/* download */
+.download{padding:3rem 0 4.5rem}
+.download .lead{max-width:34rem;color:var(--ink-2);margin-bottom:1.75rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1rem}
-.card{background:var(--panel);border-radius:20px;padding:1.5rem}
-.card h3{font-family:var(--display);font-weight:500;font-size:1.25rem;margin:0 0 .8rem;letter-spacing:-.02em}
-.card a{display:block;text-decoration:none;padding:.55rem 0;border-top:1px solid var(--line);font-size:.98rem}
+.card{background:var(--card);border-radius:20px;padding:1.4rem;box-shadow:var(--shadow)}
+.card h3{margin-bottom:.7rem}
+.card a{display:block;text-decoration:none;padding:.5rem 0;border-top:1px solid var(--line);font-size:.97rem}
 .card a:first-of-type{border-top:0}
 .card a span{color:var(--ink-2);font-size:.85rem;margin-left:.5rem}
 .card a:hover{color:var(--accent)}
 footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
-@media (max-width:48rem){
-  .hero{padding:3.5rem 0 3rem}
-  .facts li{grid-template-columns:1fr;gap:.4rem}
-  .circles{grid-template-columns:1fr;gap:2rem;padding-top:3.5rem}
+
+/* hero animation */
+.pkt{animation:travel 7s ease-in-out infinite}
+.pkt-lock{animation:travelLock 7s ease-in-out infinite}
+.glow{animation:glow 7s ease-in-out infinite}
+.arrive{animation:arrive 7s ease-in-out infinite}
+@keyframes travel{0%,8%{transform:translate(0,0);opacity:0}12%{opacity:1}38%{transform:translate(150px,0);opacity:1}42%,100%{transform:translate(150px,0);opacity:0}}
+@keyframes travelLock{0%,40%{transform:translate(0,0);opacity:0}44%{opacity:1}72%{transform:translate(156px,0);opacity:1}76%,100%{transform:translate(156px,0);opacity:0}}
+@keyframes glow{0%,36%{opacity:.15}40%,46%{opacity:1}52%,100%{opacity:.15}}
+@keyframes arrive{0%,72%{opacity:0;transform:translateY(6px)}78%,92%{opacity:1;transform:none}100%{opacity:0}}
+
+@media (max-width:52rem){
+  .hero .wrap,.step,.board{grid-template-columns:1fr}
+  .hero{padding:3rem 0 2rem}
+  .people{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .step{gap:1.4rem}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .folder,.finder .pin,.term .out,.term .out2{opacity:1;transform:none}
+  .term .typed{max-width:100%;border-right:0}
+  .pkt,.pkt-lock{opacity:0}
+  .arrive{opacity:1}
 }
 </style>
 </head>
 <body>
 <header><div class="wrap">
-  <a class="mark" href="/">quietport</a>
-  <nav><a href="#download">Download</a></nav>
+  <a class="mark" href="/">Quietport</a>
+  <nav><a href="#how">How it works</a><a href="#circles">Circles</a><a href="#download">Download</a></nav>
 </div></header>
 
 <section class="hero"><div class="wrap">
-  <h1>a shared folder no one else can read.</h1>
-  <p>Quietport creates a shared folder on the computers of the people you have invited. What goes in it is encrypted before it leaves your machine, so the server in the middle cannot decrypt anything it stores.</p>
-  <a class="btn" href="#download">Download</a>
-</div></section>
-
-<section><div class="wrap">
-  <ul class="facts">
-    <li><b>Nothing to sign up for</b><p>You paste 1 line from your invite link and Quietport installs itself in less than 60 seconds as a new folder in Finder or File Explorer.</p></li>
-    <li><b>No app to learn</b><p>You don't need to learn a special application, because there isn't one. It works like any other folder on your computer.</p></li>
-    <li><b>A server that reads nothing</b><p>The only thing the server does is store ciphertext.</p></li>
-  </ul>
-</div></section>
-
-<section class="circles wrap">
   <div>
-    <h2>Sharing is organised in circles.</h2>
-    <p>A circle is 1 shared folder with 1 list of members and 1 key of its own. Run as many as you like.</p>
-    <p>A person can belong to several, and each circle they are in shows up as its own folder on their computer. <strong>A circle they are not in does not show up at all,</strong> and nothing on their machine can tell it exists.</p>
+    <div class="eyebrow">Private, invite only</div>
+    <h1>A shared folder no one else can read.</h1>
+    <p style="margin-top:1.3rem">Quietport creates a shared folder on the computers of the people you have invited. What goes in it is encrypted before it leaves your machine, so the server in the middle cannot decrypt anything it stores.</p>
+    <a class="btn" href="#how">See how it works</a>
   </div>
-  <figure>
-    <svg viewBox="0 0 400 400" role="img" aria-label="Three circles of members; one person sits inside two of them">
-      <g fill="none" stroke="currentColor" stroke-width="1.5" opacity=".85">
-        <circle cx="150" cy="160" r="105"/>
-        <circle cx="255" cy="175" r="95"/>
-        <circle cx="200" cy="265" r="90"/>
+  <div class="scene">
+    <svg viewBox="0 0 520 260" role="img" aria-label="A file placed in a folder on one computer travels as ciphertext through the hub and appears in the same folder on another computer">
+      <defs>
+        <linearGradient id="lap" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#eef1f7"/><stop offset="1" stop-color="#dfe4ee"/></linearGradient>
+      </defs>
+      <!-- left laptop -->
+      <g transform="translate(20,60)">
+        <rect x="0" y="0" width="150" height="100" rx="10" fill="url(#lap)" stroke="#c9d0dd"/>
+        <rect x="10" y="10" width="130" height="80" rx="6" fill="#fff"/>
+        <rect x="-8" y="100" width="166" height="10" rx="5" fill="#c9d0dd"/>
+        <g transform="translate(24,26)"><path d="M0 8 h18 l6 6 h32 v34 h-56z" fill="#5aa9f6"/><rect x="0" y="16" width="56" height="32" rx="3" fill="#7dbcf9"/></g>
+        <text x="52" y="82" font-size="10" fill="#1d1d1f" font-family="Instrument Sans,Arial" text-anchor="middle">Circle A</text>
+        <!-- file being dropped -->
+        <g class="pkt"><rect x="98" y="30" width="26" height="32" rx="3" fill="#fff" stroke="#8b93a5"/><path d="M104 40h14M104 46h14M104 52h9" stroke="#8b93a5" stroke-width="1.5"/></g>
+        <text x="75" y="128" font-size="11" fill="#5b6478" font-family="Instrument Sans,Arial" text-anchor="middle">you</text>
       </g>
-      <g fill="currentColor">
-        <circle cx="110" cy="130" r="7"/><circle cx="150" cy="95" r="7"/><circle cx="95" cy="190" r="7"/>
-        <circle cx="300" cy="140" r="7"/><circle cx="320" cy="200" r="7"/>
-        <circle cx="180" cy="320" r="7"/><circle cx="230" cy="330" r="7"/><circle cx="150" cy="280" r="7"/>
+      <!-- hub -->
+      <g transform="translate(225,95)">
+        <rect x="0" y="0" width="70" height="46" rx="10" fill="#0f1626"/>
+        <rect x="10" y="9" width="50" height="6" rx="3" fill="#2a3450"/><rect x="10" y="20" width="50" height="6" rx="3" fill="#2a3450"/><rect x="10" y="31" width="50" height="6" rx="3" fill="#2a3450"/>
+        <circle class="glow" cx="60" cy="12" r="3" fill="#4ade80"/>
+        <text x="35" y="68" font-size="11" fill="#5b6478" font-family="Instrument Sans,Arial" text-anchor="middle">hub: ciphertext only</text>
+        <!-- lock travelling on -->
+        <g class="pkt-lock" transform="translate(-40,-16)"><rect x="0" y="12" width="26" height="20" rx="4" fill="#0f1626"/><path d="M6 12v-4a7 7 0 0 1 14 0v4" fill="none" stroke="#0f1626" stroke-width="3"/><text x="13" y="26" font-size="8" fill="#8ef0b0" font-family="IBM Plex Mono,monospace" text-anchor="middle">a9f#</text></g>
       </g>
-      <circle cx="205" cy="180" r="9" fill="var(--accent)"/>
-      <g font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="13" fill="currentColor" opacity=".75">
-        <text x="72" y="70">circle</text><text x="318" y="100">circle</text><text x="245" y="350">circle</text>
+      <!-- right laptop -->
+      <g transform="translate(350,60)">
+        <rect x="0" y="0" width="150" height="100" rx="10" fill="url(#lap)" stroke="#c9d0dd"/>
+        <rect x="10" y="10" width="130" height="80" rx="6" fill="#fff"/>
+        <rect x="-8" y="100" width="166" height="10" rx="5" fill="#c9d0dd"/>
+        <g transform="translate(24,26)"><path d="M0 8 h18 l6 6 h32 v34 h-56z" fill="#5aa9f6"/><rect x="0" y="16" width="56" height="32" rx="3" fill="#7dbcf9"/></g>
+        <text x="52" y="82" font-size="10" fill="#1d1d1f" font-family="Instrument Sans,Arial" text-anchor="middle">Circle A</text>
+        <g class="arrive"><rect x="98" y="30" width="26" height="32" rx="3" fill="#fff" stroke="#8b93a5"/><path d="M104 40h14M104 46h14M104 52h9" stroke="#8b93a5" stroke-width="1.5"/></g>
+        <text x="75" y="128" font-size="11" fill="#5b6478" font-family="Instrument Sans,Arial" text-anchor="middle">someone you invited</text>
       </g>
+      <!-- links -->
+      <path d="M178 118 H225" stroke="#c9d0dd" stroke-width="2" stroke-dasharray="4 4"/>
+      <path d="M295 118 H342" stroke="#c9d0dd" stroke-width="2" stroke-dasharray="4 4"/>
     </svg>
-    <figcaption>1 person, in 2 of the 3 circles. They get 2 folders.</figcaption>
-  </figure>
-</section>
+    <p class="scene-cap">Drop a file in. It is locked on your computer, passes through the hub as gibberish, and unlocks only inside the same folder on the other side.</p>
+  </div>
+</div></section>
+
+<section class="steps" id="how"><div class="wrap">
+  <div class="eyebrow">How it works</div>
+  <h2>3 steps, no account.</h2>
+
+  <div class="step">
+    <div><div class="n">Step 1</div><h3>Someone sends you a link.</h3><p>Every invite is made for 1 person and carries only the folders meant for them. It works once and expires after 24 hours.</p></div>
+    <div class="shot"><img src="/assets/invite-page.png" width="1800" height="1040" alt="The invite page: a headline saying a private folder has been shared with you, and 1 line to paste"><div class="chip">https://quietport.app/j/<b>fbco4tqe5qh5wwfibe2oiuypfu</b></div></div>
+  </div>
+
+  <div class="step">
+    <div><div class="n">Step 2</div><h3>Paste 1 line.</h3><p>There is nothing to sign up for. You paste 1 line from your invite link and Quietport installs itself in less than 60 seconds. No administrator password, nothing outside your own user folder.</p></div>
+    <div class="term" role="img" aria-label="A terminal: the install line is typed, then it prints Quietport is connected.">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <div class="line"><span class="prompt">$ </span><span class="typed">curl -fsSL https://quietport.app/j/fbco4tqe…/mac | sh</span></div>
+      <div class="out">Quietport is connected.</div>
+      <div class="out2">$ _</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div><div class="n">Step 3</div><h3>A folder appears.</h3><p>You don't need to learn a special application, because there isn't one. QPSync shows up in Finder or File Explorer with 1 folder per circle you were invited to, and it works like any other folder on your computer.</p></div>
+    <div class="finder" role="img" aria-label="A Finder window titled QPSync in which 2 folders appear">
+      <img src="/assets/finder-chrome.png" width="1800" height="330" alt="">
+      <div class="pane">
+        <div class="folder"><svg viewBox="0 0 64 52"><path d="M2 10a4 4 0 0 1 4-4h16l6 6h30a4 4 0 0 1 4 4v30a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#5aa9f6"/><rect x="2" y="18" width="60" height="32" rx="4" fill="#7dbcf9"/></svg>Circle A</div>
+        <div class="folder"><svg viewBox="0 0 64 52"><path d="M2 10a4 4 0 0 1 4-4h16l6 6h30a4 4 0 0 1 4 4v30a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" fill="#5aa9f6"/><rect x="2" y="18" width="60" height="32" rx="4" fill="#7dbcf9"/></svg>Circle B</div>
+        <div class="pin">Pinned in your sidebar</div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section class="circles" id="circles"><div class="wrap">
+  <div class="eyebrow">Circles</div>
+  <h2>1 circle, 1 folder, 1 key.</h2>
+  <p class="intro">Sharing is organised in circles. A circle is 1 shared folder with 1 list of members and 1 key of its own. Run as many as you like. A person can belong to several, and each circle they are in shows up as its own folder. A circle they are not in does not show up at all, and nothing on their machine can tell it exists.</p>
+  <div class="board" aria-label="Three circles and four people; the highlight moves from circle to circle showing which folders each person sees">
+    <div class="legend">
+      <div class="ca"><i></i><div><span>Circle A</span><small>3 members</small></div></div>
+      <div class="cb"><i></i><div><span>Circle B</span><small>2 members</small></div></div>
+      <div class="cc"><i></i><div><span>Circle C</span><small>3 members</small></div></div>
+    </div>
+    <div class="people">
+      <div class="person"><div class="avatar">Y</div><b>You</b><div class="fold ca"><i></i>Circle A</div><div class="fold cb"><i></i>Circle B</div><div class="fold cc"><i></i>Circle C</div></div>
+      <div class="person"><div class="avatar">1</div><b>Person 1</b><div class="fold ca"><i></i>Circle A</div><div class="fold cc"><i></i>Circle C</div></div>
+      <div class="person"><div class="avatar">2</div><b>Person 2</b><div class="fold ca"><i></i>Circle A</div><div class="fold cb"><i></i>Circle B</div></div>
+      <div class="person"><div class="avatar">3</div><b>Person 3</b><div class="fold cc"><i></i>Circle C</div><div class="fold none">nothing else</div></div>
+    </div>
+    <p class="board-cap">Person 3 has 1 folder and no way of knowing Circle A or Circle B exist. You, as the operator, are in all 3.</p>
+  </div>
+</div></section>
 
 <section class="download" id="download"><div class="wrap">
-  <h2>Download</h2>
-  <p>Members download nothing here. Their invite link fetches the right version of Quietport for their computer. These downloads are for people who want to run a Quietport of their own.</p>
+  <div class="eyebrow">Download</div>
+  <h2>Run your own.</h2>
+  <p class="lead">Members download nothing here. Their invite link fetches the right version of Quietport for their computer. These downloads are for people who want to run a Quietport of their own, and for anyone who prefers to fetch the client by hand.</p>
   <div class="grid">
     <div class="card"><h3>Mac</h3>
       <a href="/dl/quietport-darwin-arm64.tar.gz">Apple silicon <span>.tar.gz</span></a>
@@ -126,7 +274,7 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
     <div class="card"><h3>Windows</h3>
       <a href="/dl/quietport-windows-amd64.zip">Windows 10 and 11 <span>.zip</span></a>
     </div>
-    <div class="card"><h3>Run your own</h3>
+    <div class="card"><h3>Hub and operator tools</h3>
       <a href="/dl/quietport-hub-linux-arm64.tar.gz">Hub, Linux arm64 <span>.tar.gz</span></a>
       <a href="/dl/quietport-hub-linux-amd64.tar.gz">Hub, Linux x86 <span>.tar.gz</span></a>
       <a href="/dl/quietport-operator-darwin-arm64.tar.gz">Operator tools, Mac <span>.tar.gz</span></a>
@@ -135,6 +283,6 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
   </div>
 </div></section>
 
-<footer><div class="wrap">Quietport 0.1.2</div></footer>
+<footer><div class="wrap" style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><span>Built with ❤️ in San Francisco</span><span>Quietport 0.1.2</span></div></footer>
 </body>
 </html>
