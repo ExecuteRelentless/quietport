@@ -1,0 +1,204 @@
+// Package model holds the types shared by the hub, qpctl and the agent.
+package model
+
+import "time"
+
+type Person struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	Household string    `json:"household,omitempty"`
+	HSUser    string    `json:"hs_user"` // headscale user name
+	HSUserID  int64     `json:"hs_user_id"`
+	Status    string    `json:"status"` // active | offboarded
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Device struct {
+	ID            int64     `json:"id"`
+	PersonID      int64     `json:"person_id"`
+	Hostname      string    `json:"hostname"`
+	OS            string    `json:"os"`
+	Arch          string    `json:"arch"`
+	AgentVersion  string    `json:"agent_version"`
+	HSNodeID      int64     `json:"headscale_node_id"`
+	TailnetIP     string    `json:"tailnet_ip"`
+	PubKey        string    `json:"pubkey"` // base64 x25519, for sealed key grants
+	EnrolledAt    time.Time `json:"enrolled_at"`
+	LastHeartbeat time.Time `json:"last_heartbeat"`
+	Status        string    `json:"status"` // active | revoked | needs_reprovision
+}
+
+type Circle struct {
+	ID                   int64     `json:"id"`
+	Slug                 string    `json:"slug"`
+	DisplayName          string    `json:"display_name"`
+	BucketPrefix         string    `json:"bucket_prefix"` // garage bucket name
+	Generation           int       `json:"generation"`    // key generation; objects live under g<N>/
+	QuotaBytes           int64     `json:"quota_bytes"`
+	SyncMode             string    `json:"sync_mode"` // bidirectional | receive-only | send-only
+	VersionRetentionDays int       `json:"version_retention_days"`
+	Excludes             []string  `json:"excludes,omitempty"`
+	BwLimit              string    `json:"bwlimit,omitempty"` // rclone --bwlimit value or timetable
+	CreatedAt            time.Time `json:"created_at"`
+	// filled for show
+	Members []Membership `json:"members,omitempty"`
+	UsedBytes int64 `json:"used_bytes,omitempty"`
+}
+
+type Membership struct {
+	PersonID   int64     `json:"person_id"`
+	PersonName string    `json:"person_name,omitempty"`
+	CircleID   int64     `json:"circle_id"`
+	Role       string    `json:"role"` // member | readonly
+	AddedAt    time.Time `json:"added_at"`
+}
+
+type Invite struct {
+	ID         int64     `json:"id"`
+	CodeHash   string    `json:"code_hash"`
+	PersonID   int64     `json:"person_id"`
+	PersonName string    `json:"person_name,omitempty"`
+	CircleIDs  []int64   `json:"circle_ids"`
+	CreatedAt  time.Time `json:"created_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	ConsumedAt *time.Time `json:"consumed_at,omitempty"`
+	Prefix     string    `json:"prefix,omitempty"` // first 6 chars of the code, for `invite list`/`revoke`
+}
+
+// CircleKey is the material a member needs to open one generation of one circle.
+type CircleKey struct {
+	Slug       string `json:"slug"`
+	Generation int    `json:"generation"`
+	Password   string `json:"password"` // rclone crypt password (raw, not obscured)
+	Salt       string `json:"salt"`     // rclone crypt password2
+}
+
+// KeyGrant is a circle key sealed to one device's public key. The hub stores and relays it, and cannot open it.
+type KeyGrant struct {
+	ID         int64     `json:"id"`
+	DeviceID   int64     `json:"device_id"`
+	CircleID   int64     `json:"circle_id"`
+	Slug       string    `json:"slug"`
+	Generation int       `json:"generation"`
+	SealedBox  string    `json:"sealed_box"` // base64 nacl SealAnonymous(JSON CircleKey)
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// CircleConfig is what the agent receives per circle in the config bundle. No key material here.
+type CircleConfig struct {
+	ID                   int64    `json:"id"`
+	Slug                 string   `json:"slug"`
+	DisplayName          string   `json:"display_name"`
+	Bucket               string   `json:"bucket"`
+	Generation           int      `json:"generation"`
+	SyncMode             string   `json:"sync_mode"`
+	Role                 string   `json:"role"`
+	QuotaBytes           int64    `json:"quota_bytes"`
+	UsedBytes            int64    `json:"used_bytes"`
+	VersionRetentionDays int      `json:"version_retention_days"`
+	Excludes             []string `json:"excludes,omitempty"`
+	BwLimit              string   `json:"bwlimit,omitempty"`
+	S3AccessKey          string   `json:"s3_access_key"`
+	S3SecretKey          string   `json:"s3_secret_key"`
+}
+
+// ConfigBundle is returned on enrol and on every heartbeat.
+type ConfigBundle struct {
+	ServerTime      time.Time      `json:"server_time"`
+	S3Endpoint      string         `json:"s3_endpoint"` // http://<hub tailnet ip>:3900
+	SyncInterval    int            `json:"sync_interval_seconds"`
+	Circles         []CircleConfig `json:"circles"`
+	Grants          []KeyGrant     `json:"grants"`
+	DeviceStatus    string         `json:"device_status"`
+	SupportContact  string         `json:"support_contact"`
+	Update          *UpdateInfo    `json:"update,omitempty"`
+}
+
+type UpdateInfo struct {
+	Version string `json:"version"`
+	URL     string `json:"url"`
+	SHA256  string `json:"sha256"`
+	Sig     string `json:"sig"` // base64 ed25519 over sha256 hex
+}
+
+type Heartbeat struct {
+	DeviceID       int64            `json:"device_id"`
+	Timestamp      time.Time        `json:"timestamp"`
+	AgentVersion   string           `json:"agent_version"`
+	OS             string           `json:"os"`
+	ConnectionType string           `json:"connection_type"` // direct | relayed | down
+	PerCircle      map[string]CircleHealth `json:"per_circle"`
+	PendingBytes   int64            `json:"pending_bytes"`
+	FreeDisk       int64            `json:"free_disk"`
+	ErrorCount     int              `json:"error_count"`
+	Conditions     []string         `json:"conditions,omitempty"` // quota_exceeded:<slug>, path_too_long:<slug>:<n>, corrupt_state:<slug>, clock_skew, disk_low
+	ClientTime     time.Time        `json:"client_time"`
+}
+
+type CircleHealth struct {
+	LastSync   time.Time `json:"last_sync"`
+	LastError  string    `json:"last_error,omitempty"`
+	Pending    int64     `json:"pending_bytes"`
+	Generation int       `json:"generation"`
+}
+
+type EnrolRequest struct {
+	InviteCode   string `json:"invite_code"`
+	Hostname     string `json:"hostname"`
+	OS           string `json:"os"`
+	Arch         string `json:"arch"`
+	AgentVersion string `json:"agent_version"`
+	TailnetIP    string `json:"tailnet_ip"`
+	PubKey       string `json:"pubkey"`
+}
+
+type EnrolResponse struct {
+	DeviceID    int64        `json:"device_id"`
+	DeviceToken string       `json:"device_token"`
+	Config      ConfigBundle `json:"config"`
+}
+
+// InvitePayload is what the installer downloads (after the invite page). Circle keys are inside
+// SealedKeys, encrypted with a key derived from the invite code, which the hub only holds hashed.
+type InvitePayload struct {
+	LoginServer    string   `json:"login_server"`
+	PreAuthKey     string   `json:"preauth_key"`
+	HubAPI         string   `json:"hub_api"` // http://<tailnet ip>:8443
+	SupportContact string   `json:"support_contact"`
+	OperatorName   string   `json:"operator_name"`
+	Circles        []string `json:"circles"` // display names, for folder creation before first sync
+	SealedKeys     string   `json:"sealed_keys"` // base64 chacha20poly1305(JSON []CircleKey) under HKDF(code)
+	AgentVersion   string   `json:"agent_version"`
+}
+
+type AuditEntry struct {
+	ID        int64     `json:"id"`
+	Timestamp time.Time `json:"timestamp"`
+	Operator  string    `json:"operator"`
+	Action    string    `json:"action"`
+	Target    string    `json:"target"`
+	Detail    string    `json:"detail"`
+}
+
+type Event struct {
+	ID        int64     `json:"id"`
+	Timestamp time.Time `json:"timestamp"`
+	Kind      string    `json:"kind"`
+	PersonID  int64     `json:"person_id"`
+	DeviceID  int64     `json:"device_id"`
+	Detail    string    `json:"detail"`
+}
+
+const (
+	StatusActive       = "active"
+	StatusRevoked      = "revoked"
+	StatusReprovision  = "needs_reprovision"
+	StatusOffboarded   = "offboarded"
+	ModeBidirectional  = "bidirectional"
+	ModeReceiveOnly    = "receive-only"
+	ModeSendOnly       = "send-only"
+	DefaultRetention   = 30
+	HeartbeatInterval  = 5 * time.Minute
+	DefaultSyncSeconds = 60
+)

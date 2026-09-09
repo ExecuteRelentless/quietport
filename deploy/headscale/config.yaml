@@ -1,0 +1,48 @@
+# Quietport hub: Headscale control server (FR-80). Listens on loopback only; qp-hub terminates TLS on :443 and proxies here.
+server_url: https://__HUB_HOST__
+listen_addr: 127.0.0.1:8080
+metrics_listen_addr: 127.0.0.1:9090
+grpc_listen_addr: 127.0.0.1:50443
+grpc_allow_insecure: false
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+derp:
+  server:
+    enabled: false
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  auto_update_enabled: true
+  update_frequency: 24h
+disable_check_updates: true
+node:
+  expiry: 0
+  ephemeral:
+    inactivity_timeout: 30m
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
+log:
+  format: text
+  level: info
+# Policy is pushed from the version-controlled file with `headscale policy set -f` (FR-81); database mode makes that a live reload.
+policy:
+  mode: database
+dns:
+  magic_dns: false
+  override_local_dns: false
+  base_domain: quietport.internal
+  nameservers:
+    global: []
+  search_domains: []
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"
+logtail:
+  enabled: false
+taildrop:
+  enabled: false

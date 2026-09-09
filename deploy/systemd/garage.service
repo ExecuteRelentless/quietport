@@ -1,0 +1,21 @@
+[Unit]
+Description=Garage object store (Quietport hub)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=garage
+Group=garage
+# wait until the tailnet address we bind to exists (FR-70)
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 60); do ip -4 addr show tailscale0 2>/dev/null | grep -q "inet " && exit 0; sleep 2; done; exit 1'
+ExecStart=/usr/local/bin/garage -c /etc/garage/garage.toml server
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/garage
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

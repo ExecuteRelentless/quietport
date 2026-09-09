@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your shared folder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono&display=swap">
+<style>:root{--bg:#f3f5f3;--bg-2:#e9edeb;--ink:#141f1d;--ink-2:#4f5f5b;--rule:#cfd8d4;--accent:#155f56;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111917;--bg-2:#182220;--ink:#e6ecea;--ink-2:#9db0aa;--rule:#2a3835;--accent:#5fc6b3;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#111917;--bg-2:#182220;--ink:#e6ecea;--ink-2:#9db0aa;--rule:#2a3835;--accent:#5fc6b3;color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 "Atkinson Hyperlegible","Helvetica Neue",Arial,sans-serif}
+main{max-width:40rem;margin:0 auto;padding:4rem 1.5rem 5rem}
+h1{font-family:"Newsreader",Georgia,serif;font-weight:500;font-size:clamp(1.8rem,4vw,2.4rem);line-height:1.15;text-wrap:balance;margin:0 0 1.2rem}
+p{margin:0 0 1rem;max-width:62ch}
+pre,code{font-family:"IBM Plex Mono",Menlo,Consolas,monospace;font-size:.9em}
+pre{background:var(--bg-2);border:1px solid var(--rule);padding:.9rem 1rem;overflow-x:auto;user-select:all;margin:0 0 1.2rem;line-height:1.5}
+a{color:var(--accent);text-underline-offset:3px}
+.brand{font-family:"Newsreader",Georgia,serif;font-size:1.2rem;color:var(--ink-2);margin-bottom:2.2rem}
+details{margin-top:2.5rem;color:var(--ink-2);font-size:.95rem}summary{cursor:pointer}
+details p{margin-top:.8rem}
+</style></head><body><main>
+<div class="brand">Quietport</div>
+<h1>{{.Operator}} has shared a private folder with you.</h1>
+{{if eq .OS "mac"}}<p>Open Terminal (press ⌘ and Space, type <b>Terminal</b>, press Return), paste the line below and press Return.</p><pre>{{.Mac1}}</pre>
+{{else if eq .OS "win"}}<p>Open PowerShell (press the Windows key, type <b>PowerShell</b>, press Enter), paste the line below and press Enter.</p><pre>{{.Win1}}</pre>
+{{else}}<p>Open this link on the Mac or Windows computer where you want the folder to appear.</p>{{end}}
+<p>When it says <b>Quietport is connected.</b>, look for the QPSync folder in {{if eq .OS "win"}}File Explorer{{else}}Finder{{end}}.</p>
+<details><summary>Other options</summary>
+<p>Mac:</p><pre>{{.Mac1}}</pre><p>or <a href="/j/{{.Code}}/QuietportInstall.command">download the installer</a> (right-click it and choose Open).</p>
+<p>Windows:</p><pre>{{.Win1}}</pre><p>or <a href="/j/{{.Code}}/QuietportInstall.cmd">download the installer</a>.</p>
+<p>Questions: {{.Support}}</p></details>
+</main></body></html>
