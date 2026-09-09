@@ -4,245 +4,137 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quietport</title>
-<meta name="description" content="A private, invite-only encrypted file network. Files appear in a normal folder. No accounts, no interface to learn, no server that can read the data.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23143b36'/%3E%3Cpath d='M9 21V11h9a4 4 0 0 1 0 8h-6' fill='none' stroke='%23e9f1ee' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<meta name="description" content="A shared folder no one else can read. Invite only, encrypted before it leaves your machine, nothing to sign up for.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23111'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23ecebe6'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500&family=Instrument+Sans:wght@400;500&display=swap">
 <style>
 :root{
-  --bg:#f3f5f3; --bg-2:#e9edeb; --ink:#141f1d; --ink-2:#4f5f5b; --rule:#cfd8d4; --accent:#155f56; --accent-ink:#eaf3f0; --tree:#1c2a27;
-  --display:"Newsreader",Georgia,"Times New Roman",serif;
-  --body:"Atkinson Hyperlegible","Helvetica Neue",Arial,sans-serif;
-  --mono:"IBM Plex Mono",Menlo,Consolas,monospace;
+  --bg:#ecebe6; --panel:#e2e0d9; --ink:#131311; --ink-2:#67665f; --line:#cfcdc4; --accent:#5c6b4f; --on-accent:#f3f2ec;
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --body:"Instrument Sans","Helvetica Neue",Arial,sans-serif;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){ --bg:#111917; --bg-2:#182220; --ink:#e6ecea; --ink-2:#9db0aa; --rule:#2a3835; --accent:#5fc6b3; --accent-ink:#0e1a17; --tree:#dfe7e4; color-scheme:dark; }
+  :root:not([data-theme="light"]){ --bg:#141412; --panel:#1d1d1a; --ink:#ecebe6; --ink-2:#a3a29a; --line:#33332e; --accent:#a9b995; --on-accent:#141412; color-scheme:dark; }
 }
-:root[data-theme="dark"]{ --bg:#111917; --bg-2:#182220; --ink:#e6ecea; --ink-2:#9db0aa; --rule:#2a3835; --accent:#5fc6b3; --accent-ink:#0e1a17; --tree:#dfe7e4; color-scheme:dark; }
-
+:root[data-theme="dark"]{ --bg:#141412; --panel:#1d1d1a; --ink:#ecebe6; --ink-2:#a3a29a; --line:#33332e; --accent:#a9b995; --on-accent:#141412; color-scheme:dark; }
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.55}
-a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:3px}
-a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.wrap{max-width:66rem;margin:0 auto;padding:0 1.5rem}
-h1,h2,h3{font-family:var(--display);font-weight:500;line-height:1.1;text-wrap:balance;margin:0}
-h1{font-size:clamp(2.2rem,5vw,3.6rem);letter-spacing:-.01em}
-h2{font-size:clamp(1.55rem,3vw,2.1rem);margin-bottom:1rem}
-h3{font-size:1.2rem;font-family:var(--body);font-weight:700}
-p{margin:0 0 1rem;max-width:62ch}
-p.lede{font-size:1.2rem;line-height:1.45;color:var(--ink);max-width:34ch}
-.eyebrow{font-family:var(--mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin-bottom:.9rem}
-code,pre,kbd{font-family:var(--mono);font-size:.92em}
-pre{margin:0;overflow-x:auto;line-height:1.5}
-.tree{background:var(--bg-2);border:1px solid var(--rule);padding:1.1rem 1.25rem;color:var(--tree)}
-.tree .dim{color:var(--ink-2)}
-.tree .on{color:var(--accent);font-weight:500}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:18px;line-height:1.5}
+a{color:inherit}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.wrap{max-width:60rem;margin:0 auto;padding:0 1.5rem}
+header .wrap{display:flex;justify-content:space-between;align-items:center;padding-top:1.4rem}
+.mark{font-family:var(--display);font-weight:500;font-size:1.15rem;letter-spacing:-.01em;text-decoration:none}
+header nav a{font-size:.95rem;color:var(--ink-2);text-decoration:none}
+header nav a:hover{color:var(--ink)}
 
-/* header */
-header{padding:1.6rem 0 0}
-header .wrap{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap}
-.brand{font-family:var(--display);font-size:1.35rem;font-weight:500;color:var(--ink);text-decoration:none}
-nav{display:flex;gap:1.4rem;font-size:.95rem}
-nav a{color:var(--ink-2)}
+.hero{padding:6rem 0 4.5rem}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(3rem,9.5vw,7.4rem);line-height:.95;letter-spacing:-.035em;margin:0 0 2rem;text-wrap:balance;max-width:11ch}
+.hero p{font-size:1.15rem;max-width:34rem;margin:0 0 2rem;color:var(--ink)}
+.btn{display:inline-block;background:var(--ink);color:var(--bg);text-decoration:none;padding:.85rem 1.4rem;border-radius:999px;font-weight:500;font-size:1rem}
+.btn:hover{background:var(--accent);color:var(--on-accent)}
 
-/* hero */
-.hero{padding:4rem 0 3.2rem;border-bottom:1px solid var(--rule)}
-.hero .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:3rem;align-items:start}
-.hero p.lede{margin-top:1.3rem}
-.hero .cta{margin-top:1.6rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
-.btn{display:inline-block;background:var(--accent);color:var(--accent-ink);padding:.7rem 1.1rem;border:1px solid var(--accent);text-decoration:none;font-weight:700;font-size:.98rem}
-.btn.quiet{background:transparent;color:var(--accent)}
-.caption{font-size:.86rem;color:var(--ink-2);margin-top:.6rem;max-width:none}
+.facts{border-top:1px solid var(--line);margin:0;padding:0;list-style:none}
+.facts li{display:grid;grid-template-columns:minmax(0,14rem) 1fr;gap:1.5rem;padding:1.6rem 0;border-bottom:1px solid var(--line)}
+.facts b{font-family:var(--display);font-weight:500;font-size:1.35rem;letter-spacing:-.02em;line-height:1.15}
+.facts p{margin:0;max-width:34rem;color:var(--ink-2)}
+.facts p strong{color:var(--ink);font-weight:500}
 
-/* sections */
-section{padding:3.2rem 0;border-bottom:1px solid var(--rule)}
-section:last-of-type{border-bottom:0}
-.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:2.5rem;align-items:start}
-.cols > *{min-width:0}
-dl.rules{display:grid;grid-template-columns:max-content 1fr;gap:.55rem 1.4rem;margin:0;max-width:62ch}
-dl.rules dt{font-family:var(--mono);font-size:.85rem;color:var(--ink-2);padding-top:.15rem}
-dl.rules dd{margin:0}
-table{border-collapse:collapse;width:100%;font-size:.95rem}
-th,td{text-align:left;padding:.55rem .8rem .55rem 0;border-bottom:1px solid var(--rule);vertical-align:top}
-th{font-weight:700;font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
-td.mono{font-family:var(--mono);font-size:.88rem;white-space:nowrap}
-.tablewrap{overflow-x:auto}
-ol.steps{list-style:none;padding:0;margin:0;counter-reset:s;display:grid;gap:1.2rem;max-width:62ch}
-ol.steps li{counter-increment:s;display:grid;grid-template-columns:2.2rem 1fr;gap:.6rem;align-items:baseline}
-ol.steps li::before{content:counter(s);font-family:var(--display);font-size:1.6rem;color:var(--ink-2);line-height:1}
-ol.steps pre{margin:.5rem 0 0;background:var(--bg-2);border:1px solid var(--rule);padding:.6rem .8rem;font-size:.86rem}
-.dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1.5rem 2.5rem;margin-top:1.5rem}
-.dl h3{margin-bottom:.35rem}
-.dl p{font-size:.95rem;color:var(--ink-2);margin-bottom:.5rem}
-.dl a.file{font-family:var(--mono);font-size:.86rem;display:block;margin:.25rem 0}
-.aside{border-left:2px solid var(--rule);padding-left:1rem;color:var(--ink-2);font-size:.95rem;max-width:62ch}
-footer{padding:2rem 0 3rem;font-size:.86rem;color:var(--ink-2)}
-footer .wrap{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
-@media (max-width:52rem){
-  .hero .wrap,.cols{grid-template-columns:1fr}
-  .hero{padding:2.6rem 0 2.2rem}
-  p.lede{max-width:none}
-}
-@media (prefers-reduced-motion:no-preference){
-  .tree .on{animation:none}
+.circles{padding:5.5rem 1.5rem 4rem;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:3rem;align-items:center}
+.circles h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,4.5vw,3.2rem);letter-spacing:-.03em;line-height:1;margin:0 0 1.2rem}
+.circles p{margin:0 0 1rem;max-width:30rem;color:var(--ink-2)}
+.circles p strong{color:var(--ink);font-weight:500}
+figure{margin:0;background:var(--panel);border-radius:24px;padding:1.25rem 1.25rem 1rem;display:flex;flex-direction:column;align-items:center;justify-content:center}
+figure svg{width:100%;height:auto;max-width:24rem}
+figcaption{font-size:.85rem;color:var(--ink-2);text-align:center;margin-top:.25rem}
+
+.download{padding:2rem 0 5rem}
+.download h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,4.5vw,3.2rem);letter-spacing:-.03em;line-height:1;margin:0 0 1rem}
+.download > .wrap > p{max-width:34rem;color:var(--ink-2);margin:0 0 2rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1rem}
+.card{background:var(--panel);border-radius:20px;padding:1.5rem}
+.card h3{font-family:var(--display);font-weight:500;font-size:1.25rem;margin:0 0 .8rem;letter-spacing:-.02em}
+.card a{display:block;text-decoration:none;padding:.55rem 0;border-top:1px solid var(--line);font-size:.98rem}
+.card a:first-of-type{border-top:0}
+.card a span{color:var(--ink-2);font-size:.85rem;margin-left:.5rem}
+.card a:hover{color:var(--accent)}
+footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
+@media (max-width:48rem){
+  .hero{padding:3.5rem 0 3rem}
+  .facts li{grid-template-columns:1fr;gap:.4rem}
+  .circles{grid-template-columns:1fr;gap:2rem;padding-top:3.5rem}
 }
 </style>
 </head>
 <body>
-<header>
-  <div class="wrap">
-    <a class="brand" href="/">Quietport</a>
-    <nav><a href="#example">Example</a><a href="#invite">Invites</a><a href="#download">Download</a><a href="#rules">Rules</a></nav>
-  </div>
-</header>
+<header><div class="wrap">
+  <a class="mark" href="/">quietport</a>
+  <nav><a href="#download">Download</a></nav>
+</div></header>
 
-<div class="hero">
-  <div class="wrap">
-    <div>
-      <div class="eyebrow">Private file sharing, invite only</div>
-      <h1>A shared folder that nobody else can read.</h1>
-      <p class="lede">Files you put in it appear on the computers of the people you invited. The server in the middle stores ciphertext and nothing else.</p>
-      <div class="cta">
-        <a class="btn" href="#download">Download</a>
-        <a class="btn quiet" href="#invite">How an invite works</a>
-      </div>
-    </div>
-    <div>
-      <pre class="tree">~/QPSync/
-├── <span class="on">Family/</span>
-│   ├── 2026 tax folder/
-│   └── house insurance.pdf
-├── <span class="on">Siblings/</span>
-│   └── mom's 70th - plans.docx
-└── <span class="on">Photos/</span>
-    └── Sept lake trip/  <span class="dim">(312 items)</span>
+<section class="hero"><div class="wrap">
+  <h1>a shared folder no one else can read.</h1>
+  <p>Quietport creates a shared folder on the computers of the people you have invited. What goes in it is encrypted before it leaves your machine, so the server in the middle cannot decrypt anything it stores.</p>
+  <a class="btn" href="#download">Download</a>
+</div></section>
 
-<span class="dim">Quietport is connected.</span></pre>
-      <p class="caption">What a member sees. One folder per circle they belong to, nothing else. No app window, no tray icon, no login, no settings.</p>
-    </div>
-  </div>
-</div>
+<section><div class="wrap">
+  <ul class="facts">
+    <li><b>Nothing to sign up for</b><p>You paste 1 line from your invite link and Quietport installs itself in less than 60 seconds as a new folder in Finder or File Explorer.</p></li>
+    <li><b>No app to learn</b><p>You don't need to learn a special application, because there isn't one. It works like any other folder on your computer.</p></li>
+    <li><b>A server that reads nothing</b><p>The only thing the server does is store ciphertext.</p></li>
+  </ul>
+</div></section>
 
-<section id="what">
-  <div class="wrap cols">
-    <div>
-      <div class="eyebrow">What it is</div>
-      <h2>A folder is the whole interface.</h2>
-    </div>
-    <div>
-      <p>Quietport keeps one or more folders in sync between a small group of people. The person who runs it (the operator) creates a circle, adds members to it, and sends each of them a link. The link installs a small background program that puts a folder in their home directory and keeps it up to date. There is no sign-up form and no password to remember, because there is no account.</p>
-      <p>Every file is encrypted on the member's own computer before it goes anywhere, with a key that only the members of that circle hold. File names are encrypted too. The hub that relays the files is a plain server that stores blobs it cannot open, and it never receives a circle key. If someone walked off with the hub's disk they would have a pile of ciphertext and the sizes of the files.</p>
-      <p>Traffic between each member and the hub runs inside a WireGuard tunnel, so the encrypted files are wrapped a second time in transit. Members' computers cannot reach each other, only the hub.</p>
-      <p>Sync runs every 60 seconds when idle and within 5 seconds of a change. Files up to 10 GB resume after an interruption instead of starting over. When 2 people edit the same file, both copies are kept: the newer one stays in place and the older one moves into a hidden <code>.qp-versions</code> folder next to it, named with the time it was replaced, and is deleted after 30 days. The program shows a notification in exactly 3 situations: the disk is nearly full, a key was changed and the computer needs a fresh invite, or it has not been able to sync for 7 days. Otherwise it says nothing.</p>
-    </div>
+<section class="circles wrap">
+  <div>
+    <h2>Sharing is organised in circles.</h2>
+    <p>A circle is 1 shared folder with 1 list of members and 1 key of its own. Run as many as you like.</p>
+    <p>A person can belong to several, and each circle they are in shows up as its own folder on their computer. <strong>A circle they are not in does not show up at all,</strong> and nothing on their machine can tell it exists.</p>
   </div>
+  <figure>
+    <svg viewBox="0 0 400 400" role="img" aria-label="Three circles of members; one person sits inside two of them">
+      <g fill="none" stroke="currentColor" stroke-width="1.5" opacity=".85">
+        <circle cx="150" cy="160" r="105"/>
+        <circle cx="255" cy="175" r="95"/>
+        <circle cx="200" cy="265" r="90"/>
+      </g>
+      <g fill="currentColor">
+        <circle cx="110" cy="130" r="7"/><circle cx="150" cy="95" r="7"/><circle cx="95" cy="190" r="7"/>
+        <circle cx="300" cy="140" r="7"/><circle cx="320" cy="200" r="7"/>
+        <circle cx="180" cy="320" r="7"/><circle cx="230" cy="330" r="7"/><circle cx="150" cy="280" r="7"/>
+      </g>
+      <circle cx="205" cy="180" r="9" fill="var(--accent)"/>
+      <g font-family="Instrument Sans, Helvetica, Arial, sans-serif" font-size="13" fill="currentColor" opacity=".75">
+        <text x="72" y="70">circle</text><text x="318" y="100">circle</text><text x="245" y="350">circle</text>
+      </g>
+    </svg>
+    <figcaption>1 person, in 2 of the 3 circles. They get 2 folders.</figcaption>
+  </figure>
 </section>
 
-<section id="example">
-  <div class="wrap cols">
-    <div>
-      <div class="eyebrow">One example</div>
-      <h2>A family with 5 circles.</h2>
-      <p class="aside">The operator here is a member of every circle. The operator can read any circle they belong to and cannot read one they do not, because they never had that key.</p>
+<section class="download" id="download"><div class="wrap">
+  <h2>Download</h2>
+  <p>Members download nothing here. Their invite link fetches the right version of Quietport for their computer. These downloads are for people who want to run a Quietport of their own.</p>
+  <div class="grid">
+    <div class="card"><h3>Mac</h3>
+      <a href="/dl/quietport-darwin-arm64.tar.gz">Apple silicon <span>.tar.gz</span></a>
+      <a href="/dl/quietport-darwin-amd64.tar.gz">Intel <span>.tar.gz</span></a>
     </div>
-    <div>
-      <div class="tablewrap">
-      <table>
-        <thead><tr><th>Circle</th><th>Members</th><th>Mode</th></tr></thead>
-        <tbody>
-          <tr><td class="mono">family</td><td>you, your partner, Mom, Dad, Sarah</td><td>both ways</td></tr>
-          <tr><td class="mono">siblings</td><td>you, Sarah, Ben</td><td>both ways</td></tr>
-          <tr><td class="mono">photos</td><td>everyone</td><td>both ways</td></tr>
-          <tr><td class="mono">documents</td><td>you, your partner</td><td>both ways</td></tr>
-          <tr><td class="mono">newsletter</td><td>you write, 12 others read</td><td>send only</td></tr>
-        </tbody>
-      </table>
-      </div>
-      <p style="margin-top:1.2rem">Sarah is in <code>family</code> and <code>siblings</code>, so her computer has 2 folders under <code>QPSync</code> and no way to tell that <code>documents</code> exists. Ben has 1. Mom has 2 and, being in <code>photos</code> too, a third that fills up every time someone drops in a batch from a trip.</p>
-      <p>When Ben leaves the family circle, the operator runs <code>qpctl offboard ben</code>. His device is dropped from the network, the circle's key is replaced, the files on the hub are re-encrypted under the new key, and everyone still in the circle picks up the new key on their next check-in, within 5 minutes. What Ben already downloaded stays on Ben's computer. Nothing can take that back, and the program says so when you run it.</p>
+    <div class="card"><h3>Windows</h3>
+      <a href="/dl/quietport-windows-amd64.zip">Windows 10 and 11 <span>.zip</span></a>
+    </div>
+    <div class="card"><h3>Run your own</h3>
+      <a href="/dl/quietport-hub-linux-arm64.tar.gz">Hub, Linux arm64 <span>.tar.gz</span></a>
+      <a href="/dl/quietport-hub-linux-amd64.tar.gz">Hub, Linux x86 <span>.tar.gz</span></a>
+      <a href="/dl/quietport-operator-darwin-arm64.tar.gz">Operator tools, Mac <span>.tar.gz</span></a>
+      <a href="/dl/SHA256SUMS.signed">Signed checksums</a>
     </div>
   </div>
-</section>
+</div></section>
 
-<section id="invite">
-  <div class="wrap cols">
-    <div>
-      <div class="eyebrow">How an invite works</div>
-      <h2>One link, one line, one folder.</h2>
-      <p class="aside">The link works once and expires after 24 hours. Opened a second time, it shows a plain page that says to ask the person who sent it.</p>
-    </div>
-    <div>
-      <ol class="steps">
-        <li><div>The operator creates the invite. It names the person and the circles they get, and it carries the keys for those circles only.
-          <pre>qpctl invite create sarah --circles family,siblings
-https://quietport.app/j/fbco4tqe5qh5wwfibe2oiuypfu</pre></div></li>
-        <li><div>Sarah opens the link on her Mac or PC. The page detects which one and gives her a single line to paste into Terminal or PowerShell. No installer to click through, and no administrator password, because nothing is installed outside her own user folder.
-          <pre>curl -fsSL https://quietport.app/j/fbco4tqe5qh5wwfibe2oiuypfu/mac | sh</pre></div></li>
-        <li><div>On the test Mac it took 59 seconds, then it printed <code>Quietport is connected.</code> and stopped talking. <code>QPSync</code> is pinned in her Finder sidebar with <code>Family</code> and <code>Siblings</code> inside, already filling.</div></li>
-      </ol>
-    </div>
-  </div>
-</section>
-
-<section id="download">
-  <div class="wrap">
-    <div class="eyebrow">Download</div>
-    <h2>2 kinds of download.</h2>
-    <p>Members do not need this page. Their invite link fetches the right build for their computer on its own. The downloads here are for someone who wants to run a Quietport of their own, and for members who would rather fetch the client by hand.</p>
-    <div class="dl">
-      <div>
-        <h3>Operator kit</h3>
-        <p>The hub and the <code>qpctl</code> command. Runs on a 2 vCPU, 4 GB Linux server (this one is an Oracle Cloud A1 with 12 GB and an 80 GB disk) with only ports 22 and 443 open to the internet. Setup is 2 scripts and about 15 minutes.</p>
-        <a class="file" href="/dl/quietport-hub-linux-arm64.tar.gz">quietport-hub-linux-arm64.tar.gz</a>
-        <a class="file" href="/dl/quietport-hub-linux-amd64.tar.gz">quietport-hub-linux-amd64.tar.gz</a>
-        <a class="file" href="/dl/quietport-operator-darwin-arm64.tar.gz">quietport-operator-darwin-arm64.tar.gz</a>
-        <a class="file" href="/dl/quietport-operator-darwin-amd64.tar.gz">quietport-operator-darwin-amd64.tar.gz</a>
-      </div>
-      <div>
-        <h3>Client</h3>
-        <p>The background program a member runs. It is useless without an invite link, which carries the network address and the circle keys. macOS 12 or later, Windows 10 or 11.</p>
-        <a class="file" href="/dl/quietport-darwin-arm64.tar.gz">quietport-darwin-arm64.tar.gz</a>
-        <a class="file" href="/dl/quietport-darwin-amd64.tar.gz">quietport-darwin-amd64.tar.gz</a>
-        <a class="file" href="/dl/quietport-windows-amd64.zip">quietport-windows-amd64.zip</a>
-      </div>
-      <div>
-        <h3>What is inside</h3>
-        <p>Go binaries plus 2 bundled tools: rclone for encryption and transfer, and a userspace build of the Tailscale daemon for the tunnel. No kernel drivers, no system services. MIT licence.</p>
-        <a class="file" href="/dl/SHA256SUMS.signed">SHA256SUMS.signed</a>
-        <p style="margin-top:.5rem">Checksums are signed with the release key that clients also use to verify their own updates.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="rules">
-  <div class="wrap cols">
-    <div>
-      <div class="eyebrow">The rules it is built on</div>
-      <h2>5 constraints, not preferences.</h2>
-      <p class="aside">Everything above follows from these. A feature that breaks one of them does not get built.</p>
-    </div>
-    <div>
-      <dl class="rules">
-        <dt>C-1</dt><dd><strong>Invite only.</strong> No sign-up, no discovery, no public access. Every member was added by an operator who knows them.</dd>
-        <dt>C-2</dt><dd><strong>No administrator rights.</strong> Install and operation run as the current user. Nothing is written outside the user profile.</dd>
-        <dt>C-3</dt><dd><strong>Invisible.</strong> After install, the only surface is a folder. No tray icon, no web page, no settings.</dd>
-        <dt>C-4</dt><dd><strong>Zero-knowledge hub.</strong> The hub stores encrypted blobs and encrypted names. Possession of the hub yields nothing without a circle key.</dd>
-        <dt>C-5</dt><dd><strong>Desktop only.</strong> Windows and macOS. Linux best effort. No phones, in this version.</dd>
-      </dl>
-      <p style="margin-top:1.4rem">Couple of things to know before you run one. The tunnel runs in user space because C-2 forbids a kernel driver, and that costs some speed on large transfers. And there is no key escrow: if the operator loses every copy of a circle's keys, that circle's files on the hub are gone. <code>qpctl</code> exports the keys, splits them 3 of 5 among people you trust, and can prove a backup still opens a real file.</p>
-    </div>
-  </div>
-</section>
-
-<footer>
-  <div class="wrap">
-    <span>Quietport 0.1.1, built in San Francisco.</span>
-    <span></span>
-  </div>
-</footer>
+<footer><div class="wrap">Quietport 0.1.2</div></footer>
 </body>
 </html>
