@@ -146,7 +146,7 @@ func (h *Hub) personView(p model.Person) personView {
 	}
 	invs, _ := h.db.Invites()
 	for _, i := range invs {
-		if i.PersonID == p.ID {
+		if i.PersonID == p.ID && !i.Revoked {
 			v.Invites = append(v.Invites, i.Invite)
 		}
 	}
@@ -214,7 +214,10 @@ func (h *Hub) opPersonOffboard(w http.ResponseWriter, r *http.Request) {
 	}
 	invs, _ := h.db.Invites()
 	for _, i := range invs {
-		if i.PersonID == p.ID && i.ConsumedAt == nil {
+		if i.PersonID == p.ID && i.ConsumedAt == nil && !i.Revoked {
+			if i.PreAuthKeyID > 0 {
+				_ = h.hs.PreAuthKeyExpire(p.HSUserID, i.PreAuthKeyID)
+			}
 			_ = h.db.InviteRevoke(i.ID)
 		}
 	}
