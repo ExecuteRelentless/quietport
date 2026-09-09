@@ -231,6 +231,7 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 	if res.OK {
 		h.LastSync = time.Now()
 		h.LastError = ""
+		h.Failures = 0
 		a.st.LastSyncOK = time.Now()
 		if c.Resync {
 			_ = a.store.Update(func(cf *Config) {
@@ -243,6 +244,7 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 		}
 	} else {
 		a.st.ErrorCount++
+		h.Failures++
 		h.LastError = truncate(lastLine(res.Output), 200)
 		a.logf("%s: sync failed (%s, %v): %s", c.Slug, mode, res.Err, truncate(ScrubPaths(tailLines(res.Output, 12)), 1500))
 		if res.Quota {
@@ -250,6 +252,10 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 		}
 		if res.PathTooLong {
 			a.addCondition("path_too_long:" + c.Slug)
+		}
+		// a bisync that keeps aborting (new path, moved folder, lost listings) is not going to heal on its own
+		if mode == "bisync" && !c.Resync && h.Failures >= 3 && strings.Contains(strings.ToLower(res.Output), "bisync aborted") {
+			res.NeedsResync = true
 		}
 		if res.NeedsResync && mode == "bisync" && !c.Resync {
 			a.logf("%s: bisync state unusable, scheduling a full resync", c.Slug) // §9 corrupt bisync state

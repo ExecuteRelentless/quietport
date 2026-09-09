@@ -41,6 +41,7 @@ type Circle struct {
 	Excludes             []string  `json:"excludes,omitempty"`
 	BwLimit              string    `json:"bwlimit,omitempty"` // rclone --bwlimit value or timetable
 	InvitePolicy         string    `json:"invite_policy"`     // members (any read/write member can invite) | operator
+	OwnerPersonID        int64     `json:"owner_person_id"`   // member who may remove people from their own computer (0 = operator only)
 	CreatedAt            time.Time `json:"created_at"`
 	// filled for show
 	Members []Membership `json:"members,omitempty"`
@@ -101,6 +102,7 @@ type CircleConfig struct {
 	Excludes             []string `json:"excludes,omitempty"`
 	BwLimit              string   `json:"bwlimit,omitempty"`
 	CanInvite            bool     `json:"can_invite"` // this member may create invite links for the circle
+	Owner                bool     `json:"owner"`      // this member may remove people and re-key from their computer
 	S3AccessKey          string   `json:"s3_access_key"`
 	S3SecretKey          string   `json:"s3_secret_key"`
 }
@@ -143,6 +145,7 @@ type CircleHealth struct {
 	LastError  string    `json:"last_error,omitempty"`
 	Pending    int64     `json:"pending_bytes"`
 	Generation int       `json:"generation"`
+	Failures   int       `json:"failures,omitempty"` // consecutive failed cycles
 }
 
 type EnrolRequest struct {
@@ -164,6 +167,15 @@ type DeviceInviteRequest struct {
 	Prefix     string `json:"prefix"`
 	SealedKeys string `json:"sealed_keys"`
 	TTL        string `json:"ttl"`
+}
+
+// CirclePerson is what an owner sees on the Share page.
+type CirclePerson struct {
+	PersonID int64    `json:"person_id"`
+	Name     string   `json:"name"`
+	Role     string   `json:"role"`
+	Self     bool     `json:"self"`
+	Devices  []Device `json:"devices"`
 }
 
 type DeviceInviteResponse struct {

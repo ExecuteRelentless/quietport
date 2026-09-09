@@ -95,6 +95,12 @@ button.quiet{background:#eef0f5;color:#0f1626}
 <div class="err" id="err" hidden></div>
 {{end}}
 </div>
+{{range .Owned}}
+<div class="card" style="margin-top:1.2rem">
+<label>People in {{.DisplayName}}</label>
+<div id="people-{{.ID}}" data-circle="{{.ID}}" class="people"><p class="hint">Loading…</p></div>
+</div>
+{{end}}
 <p class="hint" style="margin-top:2rem"><a href="/remove?t={{.Token}}" style="color:#5b6478">Remove Quietport from this computer</a></p>
 </main>
 <script>
@@ -105,6 +111,17 @@ const err=document.getElementById('err');if(!r.ok){err.textContent=j.error||'Som
 err.hidden=true;f.hidden=true;document.getElementById('link').textContent=j.url;document.getElementById('out').hidden=false;});
 document.getElementById('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(document.getElementById('link').textContent);document.getElementById('copy').textContent='Copied'}catch(e){}});
 document.getElementById('again').addEventListener('click',()=>{document.getElementById('out').hidden=true;f.hidden=false;document.getElementById('copy').textContent='Copy link';document.getElementById('name').value=''});}
+const T={{.Token}};
+async function loadPeople(box){const cid=box.dataset.circle;const r=await fetch('/people?t='+T+'&circle='+cid);const j=await r.json();
+ if(!r.ok){box.innerHTML='<p class="hint">'+(j.error||'Could not load')+'</p>';return}
+ box.innerHTML='';j.forEach(p=>{const row=document.createElement('div');row.className='opt';row.style.justifyContent='space-between';
+  row.innerHTML='<span>'+p.name.replace(/-[a-z2-7]{4}$/,'')+(p.self?' (you)':'')+' <small style="color:#5b6478">'+p.devices.length+' computer'+(p.devices.length==1?'':'s')+'</small></span>';
+  if(!p.self){const b=document.createElement('button');b.type='button';b.className='quiet';b.style.margin='0';b.style.padding='.4rem .8rem';b.textContent='Remove';
+   b.onclick=async()=>{if(!confirm('Remove '+p.name.replace(/-[a-z2-7]{4}$/,'')+' from this folder? The folder gets a new key; this can take a while for big folders.'))return;b.disabled=true;b.textContent='Removing…';
+    const fd=new FormData();fd.append('t',T);fd.append('circle',cid);fd.append('person',p.person_id);const rr=await fetch('/people/remove',{method:'POST',body:fd});const jj=await rr.json();
+    alert(jj.result||jj.error||'Done');loadPeople(box)};row.appendChild(b)}
+  box.appendChild(row)})}
+document.querySelectorAll('.people').forEach(loadPeople);
 </script></body></html>`))
 
 type uiCircle struct {
@@ -151,8 +168,45 @@ func (a *Agent) serveLocalUI(ctx context.Context, port int, token string) int {
 				cs = append(cs, uiCircle{c.ID, c.DisplayName})
 			}
 		}
+		var owned []uiCircle
+		for _, c := range a.store.Config().Circles {
+			if !c.Removed && c.Owner && c.KeySealed != "" {
+				owned = append(owned, uiCircle{c.ID, c.DisplayName})
+			}
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = uiTmpl.Execute(w, map[string]any{"Token": token, "Circles": cs})
+		_ = uiTmpl.Execute(w, map[string]any{"Token": token, "Circles": cs, "Owned": owned})
+	})
+	mux.HandleFunc("GET /people", func(w http.ResponseWriter, r *http.Request) {
+		if !check(w, r) {
+			return
+		}
+		cid, _ := strconv.ParseInt(r.URL.Query().Get("circle"), 10, 64)
+		w.Header().Set("Content-Type", "application/json")
+		ppl, err := a.people(r.Context(), cid)
+		if err != nil {
+			w.WriteHeader(400)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(ppl)
+	})
+	mux.HandleFunc("POST /people/remove", func(w http.ResponseWriter, r *http.Request) {
+		if !check(w, r) {
+			return
+		}
+		cid, _ := strconv.ParseInt(r.FormValue("circle"), 10, 64)
+		pid, _ := strconv.ParseInt(r.FormValue("person"), 10, 64)
+		w.Header().Set("Content-Type", "application/json")
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
+		defer cancel()
+		res, err := a.removePerson(ctx, cid, pid)
+		if err != nil {
+			w.WriteHeader(400)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"result": res})
 	})
 	mux.HandleFunc("POST /invite", func(w http.ResponseWriter, r *http.Request) {
 		if !check(w, r) {

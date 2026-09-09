@@ -55,6 +55,37 @@ func (r *Rclone) env(cs CircleState, key model.CircleKey, ak, sk, endpoint strin
 	)
 }
 
+// envMulti builds an environment with one S3 remote (S3:) and any number of crypt remotes over it, each pointing at
+// its own generation prefix. Used for re-keying, where OLD: and NEW: are read and written in one rclone copy.
+func (r *Rclone) envMulti(bucket, ak, sk, endpoint string, remotes map[string]model.CircleKey) []string {
+	base := []string{}
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "RCLONE_") || strings.HasPrefix(e, "HTTP_PROXY=") || strings.HasPrefix(e, "HTTPS_PROXY=") || strings.HasPrefix(e, "NO_PROXY=") {
+			continue
+		}
+		base = append(base, e)
+	}
+	obs := func(s string) string {
+		out, err := exec.Command(r.bin, "obscure", s).Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	}
+	env := append(base,
+		"HTTP_PROXY="+r.proxy, "HTTPS_PROXY="+r.proxy, "NO_PROXY=127.0.0.1,localhost",
+		"RCLONE_CONFIG_S3_TYPE=s3", "RCLONE_CONFIG_S3_PROVIDER=Other", "RCLONE_CONFIG_S3_ACCESS_KEY_ID="+ak, "RCLONE_CONFIG_S3_SECRET_ACCESS_KEY="+sk,
+		"RCLONE_CONFIG_S3_ENDPOINT="+endpoint, "RCLONE_CONFIG_S3_REGION=garage", "RCLONE_CONFIG_S3_FORCE_PATH_STYLE=true", "RCLONE_CONFIG_S3_NO_CHECK_BUCKET=true",
+		"RCLONE_CONFIG_S3_CHUNK_SIZE=64M", "RCLONE_CONFIG_DIR="+filepath.Join(AppDir(), "rclone-nocfg"), "RCLONE_CONFIG=/dev/null")
+	for name, k := range remotes {
+		u := strings.ToUpper(name)
+		env = append(env, "RCLONE_CONFIG_"+u+"_TYPE=crypt", "RCLONE_CONFIG_"+u+"_REMOTE=S3:"+bucket+"/g"+strconv.Itoa(k.Generation),
+			"RCLONE_CONFIG_"+u+"_FILENAME_ENCRYPTION=standard", "RCLONE_CONFIG_"+u+"_DIRECTORY_NAME_ENCRYPTION=true",
+			"RCLONE_CONFIG_"+u+"_PASSWORD="+obs(k.Password), "RCLONE_CONFIG_"+u+"_PASSWORD2="+obs(k.Salt))
+	}
+	return env
+}
+
 type Result struct {
 	OK           bool
 	Err          error

@@ -65,6 +65,7 @@ func Open(path string) (*DB, error) {
 	}
 	// additive migrations
 	_, _ = d.Exec(`ALTER TABLE circle ADD COLUMN invite_policy TEXT NOT NULL DEFAULT 'members'`)
+	_, _ = d.Exec(`ALTER TABLE circle ADD COLUMN owner_person_id INTEGER NOT NULL DEFAULT 0`)
 	// audit_log is append-only (FR-93): forbid UPDATE/DELETE at the engine level.
 	_, _ = d.Exec(`CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END;`)
 	_, _ = d.Exec(`CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END;`)
@@ -221,7 +222,7 @@ func (d *DB) PersonDelete(id int64) error {
 
 // --- circles ---
 
-const circleCols = `id,slug,display_name,bucket_prefix,generation,quota_bytes,sync_mode,version_retention_days,excludes,bwlimit,s3_access_key,s3_secret_key,created_at,invite_policy`
+const circleCols = `id,slug,display_name,bucket_prefix,generation,quota_bytes,sync_mode,version_retention_days,excludes,bwlimit,s3_access_key,s3_secret_key,created_at,invite_policy,owner_person_id`
 
 type circleRow struct {
 	model.Circle
@@ -231,7 +232,7 @@ type circleRow struct {
 func scanCircle(r interface{ Scan(...any) error }) (circleRow, error) {
 	var c circleRow
 	var ex, created string
-	err := r.Scan(&c.ID, &c.Slug, &c.DisplayName, &c.BucketPrefix, &c.Generation, &c.QuotaBytes, &c.SyncMode, &c.VersionRetentionDays, &ex, &c.BwLimit, &c.S3AccessKey, &c.S3SecretKey, &created, &c.InvitePolicy)
+	err := r.Scan(&c.ID, &c.Slug, &c.DisplayName, &c.BucketPrefix, &c.Generation, &c.QuotaBytes, &c.SyncMode, &c.VersionRetentionDays, &ex, &c.BwLimit, &c.S3AccessKey, &c.S3SecretKey, &created, &c.InvitePolicy, &c.OwnerPersonID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrNotFound
 	}
@@ -254,8 +255,8 @@ func (d *DB) CircleCreate(c model.Circle, s3Access, s3Secret string) (model.Circ
 	if c.InvitePolicy == "" {
 		c.InvitePolicy = model.InviteByMembers
 	}
-	res, err := d.Exec(`INSERT INTO circle(slug,display_name,bucket_prefix,generation,quota_bytes,sync_mode,version_retention_days,excludes,bwlimit,s3_access_key,s3_secret_key,created_at,invite_policy) VALUES(?,?,?,1,?,?,?,?,?,?,?,?,?)`,
-		c.Slug, c.DisplayName, c.BucketPrefix, c.QuotaBytes, c.SyncMode, c.VersionRetentionDays, string(ex), c.BwLimit, s3Access, s3Secret, now(), c.InvitePolicy)
+	res, err := d.Exec(`INSERT INTO circle(slug,display_name,bucket_prefix,generation,quota_bytes,sync_mode,version_retention_days,excludes,bwlimit,s3_access_key,s3_secret_key,created_at,invite_policy,owner_person_id) VALUES(?,?,?,1,?,?,?,?,?,?,?,?,?,?)`,
+		c.Slug, c.DisplayName, c.BucketPrefix, c.QuotaBytes, c.SyncMode, c.VersionRetentionDays, string(ex), c.BwLimit, s3Access, s3Secret, now(), c.InvitePolicy, c.OwnerPersonID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return c, fmt.Errorf("circle %q already exists", c.Slug)
@@ -306,8 +307,8 @@ func (d *DB) CircleUpdate(c model.Circle) error {
 	if c.InvitePolicy == "" {
 		c.InvitePolicy = model.InviteByMembers
 	}
-	_, err := d.Exec(`UPDATE circle SET display_name=?,quota_bytes=?,sync_mode=?,version_retention_days=?,excludes=?,bwlimit=?,invite_policy=? WHERE id=?`,
-		c.DisplayName, c.QuotaBytes, c.SyncMode, c.VersionRetentionDays, string(ex), c.BwLimit, c.InvitePolicy, c.ID)
+	_, err := d.Exec(`UPDATE circle SET display_name=?,quota_bytes=?,sync_mode=?,version_retention_days=?,excludes=?,bwlimit=?,invite_policy=?,owner_person_id=? WHERE id=?`,
+		c.DisplayName, c.QuotaBytes, c.SyncMode, c.VersionRetentionDays, string(ex), c.BwLimit, c.InvitePolicy, c.OwnerPersonID, c.ID)
 	return err
 }
 func (d *DB) CircleSetGeneration(id int64, gen int) error {

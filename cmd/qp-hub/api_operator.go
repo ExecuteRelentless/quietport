@@ -322,6 +322,17 @@ func (h *Hub) opCircleUpdate(w http.ResponseWriter, r *http.Request) {
 	set("excludes", &c.Excludes)
 	set("bwlimit", &c.BwLimit)
 	set("invites", &c.InvitePolicy)
+	var ownerName string
+	if set("owner", &ownerName) {
+		if ownerName == "" || ownerName == "none" {
+			c.OwnerPersonID = 0
+		} else if p, err := h.db.PersonByName(ownerName); err == nil {
+			c.OwnerPersonID = p.ID
+		} else {
+			writeErr(w, 404, "no such person for owner")
+			return
+		}
+	}
 	if set("quota", &c.QuotaBytes) && h.gar != nil {
 		if bi, err := h.gar.BucketInfo(c.BucketPrefix); err == nil {
 			if err := h.gar.BucketSetQuota(bi.ID, c.QuotaBytes); err != nil {

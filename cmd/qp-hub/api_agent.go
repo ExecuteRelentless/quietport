@@ -47,6 +47,12 @@ func (h *Hub) routesAgent(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/heartbeat", h.withDevice(h.handleHeartbeat))
 	mux.HandleFunc("GET /v1/update/{os}/{arch}", h.withDevice(h.handleUpdateDownload))
 	mux.HandleFunc("POST /v1/invites", h.withDevice(h.handleDeviceInvite))
+	mux.HandleFunc("GET /v1/circles/{id}/people", h.withDevice(h.handleCirclePeople))
+	mux.HandleFunc("POST /v1/circles/{id}/remove", h.withDevice(h.handleCircleRemovePerson))
+	mux.HandleFunc("POST /v1/circles/{id}/opkey", h.withDevice(h.handleCircleOpKeyDevice))
+	mux.HandleFunc("DELETE /v1/circles/{id}/opkey/{ak}", h.withDevice(h.handleCircleOpKeyDeleteDevice))
+	mux.HandleFunc("POST /v1/circles/{id}/generation", h.withDevice(h.handleCircleGenerationDevice))
+	mux.HandleFunc("POST /v1/circles/{id}/grants", h.withDevice(h.handleCircleGrantsDevice))
 	mux.HandleFunc("GET /v1/ping", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"ok": true, "time": time.Now().UTC()}) })
 }
 
@@ -199,7 +205,7 @@ func (h *Hub) configBundle(person model.Person, dev model.Device) (model.ConfigB
 		ak, sk, _ := h.db.CircleS3(c.ID)
 		cc := model.CircleConfig{ID: c.ID, Slug: c.Slug, DisplayName: c.DisplayName, Bucket: c.BucketPrefix, Generation: c.Generation,
 			SyncMode: c.SyncMode, Role: m.Role, QuotaBytes: c.QuotaBytes, VersionRetentionDays: c.VersionRetentionDays, Excludes: c.Excludes, BwLimit: c.BwLimit,
-			CanInvite: c.InvitePolicy != model.InviteByOperator && m.Role == "member", S3AccessKey: ak, S3SecretKey: sk}
+			CanInvite: c.InvitePolicy != model.InviteByOperator && m.Role == "member", Owner: c.OwnerPersonID != 0 && c.OwnerPersonID == person.ID, S3AccessKey: ak, S3SecretKey: sk}
 		if h.gar != nil {
 			if bi, err := h.gar.BucketInfo(c.BucketPrefix); err == nil {
 				cc.UsedBytes = bi.Bytes
@@ -343,4 +349,166 @@ func (h *Hub) handleDeviceInvite(w http.ResponseWriter, r *http.Request, dev mod
 	h.db.Event("invite.created", inviter.ID, dev.ID, fmt.Sprintf("%s invited %q to %s", inviter.Name, name, c.Slug))
 	_ = h.refreshPolicy()
 	writeJSON(w, 201, model.DeviceInviteResponse{URL: "https://" + h.cfg.Host + "/j/", ExpiresAt: inv.ExpiresAt, Person: p.Name})
+}
+
+// ownerCircle loads the circle in the path and checks the calling device's person owns it.
+func (h *Hub) ownerCircle(w http.ResponseWriter, r *http.Request, dev model.Device) (model.Circle, bool) {
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	c, err := h.db.CircleByID(id)
+	if err != nil {
+		writeErr(w, 404, "no such folder")
+		return c, false
+	}
+	if c.OwnerPersonID == 0 || c.OwnerPersonID != dev.PersonID {
+		writeErr(w, 403, "only the owner of this folder can do that")
+		return c, false
+	}
+	return c, true
+}
+
+func (h *Hub) handleCirclePeople(w http.ResponseWriter, r *http.Request, dev model.Device) {
+	c, ok := h.ownerCircle(w, r, dev)
+	if !ok {
+		return
+	}
+	writeJSON(w, 200, h.circlePeople(c, dev))
+}
+
+func (h *Hub) circlePeople(c model.Circle, dev model.Device) []model.CirclePerson {
+	mems, _ := h.db.MembersOf(c.ID)
+	out := []model.CirclePerson{}
+	for _, m := range mems {
+		devs, _ := h.db.Devices(m.PersonID)
+		var act []model.Device
+		for _, d := range devs {
+			if d.Status == model.StatusActive {
+				act = append(act, d)
+			}
+		}
+		out = append(out, model.CirclePerson{PersonID: m.PersonID, Name: m.PersonName, Role: m.Role, Self: m.PersonID == dev.PersonID, Devices: act})
+	}
+	return out
+}
+
+// handleCircleRemovePerson: the owner takes someone out of the folder. The owner's device then re-keys the folder
+// (opkey -> re-encrypt -> grants -> generation), which is what locks the removed computer out of anything new.
+func (h *Hub) handleCircleRemovePerson(w http.ResponseWriter, r *http.Request, dev model.Device) {
+	c, ok := h.ownerCircle(w, r, dev)
+	if !ok {
+		return
+	}
+	var in struct {
+		PersonID int64 `json:"person_id"`
+	}
+	if err := readJSON(r, &in); err != nil || in.PersonID == 0 || in.PersonID == dev.PersonID {
+		writeErr(w, 400, "pick someone other than yourself")
+		return
+	}
+	p, err := h.db.PersonByID(in.PersonID)
+	if err != nil {
+		writeErr(w, 404, "no such person")
+		return
+	}
+	_ = h.db.MemberRemove(p.ID, c.ID)
+	devs, _ := h.db.Devices(p.ID)
+	for _, d := range devs {
+		_ = h.db.GrantsDeleteForDeviceCircle(d.ID, c.ID)
+	}
+	invs, _ := h.db.Invites()
+	for _, i := range invs {
+		if i.PersonID == p.ID && i.ConsumedAt == nil && !i.Revoked {
+			_ = h.db.InviteRevoke(i.ID)
+		}
+	}
+	// no folders left: drop them from the mesh too
+	if left, _ := h.db.CirclesOf(p.ID); len(left) == 0 {
+		for _, d := range devs {
+			if d.HSNodeID > 0 {
+				_ = h.hs.NodeDelete(d.HSNodeID)
+			}
+			_ = h.db.DeviceSetStatus(d.ID, model.StatusRevoked)
+		}
+		_ = h.db.PersonSetStatus(p.ID, model.StatusOffboarded)
+	}
+	owner, _ := h.db.PersonByID(dev.PersonID)
+	h.db.Audit("device:"+strconv.FormatInt(dev.ID, 10)+"/"+owner.Name, "circle.remove-member", c.Slug, p.Name)
+	h.db.Event("member.removed", owner.ID, dev.ID, fmt.Sprintf("%s removed %s from %s", owner.Name, p.Name, c.Slug))
+	_ = h.refreshPolicy()
+	writeJSON(w, 200, h.circlePeople(c, dev))
+}
+
+func (h *Hub) handleCircleOpKeyDevice(w http.ResponseWriter, r *http.Request, dev model.Device) {
+	c, ok := h.ownerCircle(w, r, dev)
+	if !ok {
+		return
+	}
+	bi, err := h.gar.BucketInfo(c.BucketPrefix)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	k, err := h.gar.KeyCreate(c.BucketPrefix+"-owner-"+strconv.FormatInt(time.Now().Unix(), 10), bi.ID, true)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]any{"access_key": k.AccessKeyID, "secret_key": k.SecretAccessKey, "endpoint": "http://" + h.cfg.TailnetIP + ":" + h.cfg.S3Port, "bucket": c.BucketPrefix, "used_bytes": bi.Bytes, "generation": c.Generation})
+}
+
+func (h *Hub) handleCircleOpKeyDeleteDevice(w http.ResponseWriter, r *http.Request, dev model.Device) {
+	if _, ok := h.ownerCircle(w, r, dev); !ok {
+		return
+	}
+	_ = h.gar.KeyDelete(r.PathValue("ak"))
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+func (h *Hub) handleCircleGenerationDevice(w http.ResponseWriter, r *http.Request, dev model.Device) {
+	c, ok := h.ownerCircle(w, r, dev)
+	if !ok {
+		return
+	}
+	var in struct{ Generation int }
+	if err := readJSON(r, &in); err != nil || in.Generation <= c.Generation {
+		writeErr(w, 400, "generation must increase")
+		return
+	}
+	bi, err := h.gar.BucketInfo(c.BucketPrefix)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	oldAK, _, _ := h.db.CircleS3(c.ID)
+	k, err := h.gar.KeyCreate(c.BucketPrefix+"-members", bi.ID, false)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	_ = h.db.CircleSetS3(c.ID, k.AccessKeyID, k.SecretAccessKey)
+	_ = h.gar.KeyDelete(oldAK)
+	_ = h.db.CircleSetGeneration(c.ID, in.Generation)
+	_ = h.db.GrantsDeleteForCircleBelow(c.ID, in.Generation)
+	owner, _ := h.db.PersonByID(dev.PersonID)
+	h.db.Audit("device:"+strconv.FormatInt(dev.ID, 10)+"/"+owner.Name, "circle.rotate-key", c.Slug, fmt.Sprintf("generation %d -> %d", c.Generation, in.Generation))
+	writeJSON(w, 200, map[string]any{"ok": true, "generation": in.Generation})
+}
+
+func (h *Hub) handleCircleGrantsDevice(w http.ResponseWriter, r *http.Request, dev model.Device) {
+	c, ok := h.ownerCircle(w, r, dev)
+	if !ok {
+		return
+	}
+	var gs []model.KeyGrant
+	if err := readJSON(r, &gs); err != nil {
+		writeErr(w, 400, "bad request")
+		return
+	}
+	for _, g := range gs {
+		g.CircleID = c.ID
+		if err := h.db.GrantPut(g); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "count": len(gs)})
 }

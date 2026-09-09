@@ -94,7 +94,7 @@ func cmdCircle(args []string) error {
 		if err := api.Get("/op/circles/"+slug, &c); err != nil {
 			return err
 		}
-		fmt.Printf("%s %q mode=%s generation=%d used=%s quota=%s retention=%dd invites=%s bucket=%s\n", c.Slug, c.DisplayName, c.SyncMode, c.Generation, human(c.UsedBytes), quotaStr(c.QuotaBytes), c.VersionRetentionDays, c.InvitePolicy, c.BucketPrefix)
+		fmt.Printf("%s %q mode=%s generation=%d used=%s quota=%s retention=%dd invites=%s owner=%d bucket=%s\n", c.Slug, c.DisplayName, c.SyncMode, c.Generation, human(c.UsedBytes), quotaStr(c.QuotaBytes), c.VersionRetentionDays, c.InvitePolicy, c.OwnerPersonID, c.BucketPrefix)
 		if len(c.Excludes) > 0 {
 			fmt.Printf("  excludes: %v\n", c.Excludes)
 		}
@@ -114,6 +114,7 @@ func cmdCircle(args []string) error {
 		ret := fs.Int("retention", 0, "")
 		bw := fs.String("bwlimit", "\x00", "")
 		inv := fs.String("invites", "", "members | operator")
+		owner := fs.String("owner", "", "person who may remove people and re-key from their own computer (or none)")
 		name := fs.String("name", "", "")
 		var ex stringList
 		fs.Var(&ex, "exclude", "")
@@ -141,6 +142,9 @@ func cmdCircle(args []string) error {
 		}
 		if *inv != "" {
 			patch["invites"] = *inv
+		}
+		if *owner != "" {
+			patch["owner"] = *owner
 		}
 		if len(ex) > 0 {
 			patch["excludes"] = []string(ex)

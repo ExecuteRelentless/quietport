@@ -366,7 +366,7 @@ func (h *Hub) selfStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "storage key: "+err.Error())
 		return
 	}
-	c, err := h.db.CircleCreate(model.Circle{Slug: cslug, DisplayName: folder, BucketPrefix: bucket, QuotaBytes: quota, SyncMode: model.ModeBidirectional, InvitePolicy: model.InviteByMembers}, k.AccessKeyID, k.SecretAccessKey)
+	c, err := h.db.CircleCreate(model.Circle{Slug: cslug, DisplayName: folder, BucketPrefix: bucket, QuotaBytes: quota, SyncMode: model.ModeBidirectional, InvitePolicy: model.InviteByMembers, OwnerPersonID: p.ID}, k.AccessKeyID, k.SecretAccessKey)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return

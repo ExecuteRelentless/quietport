@@ -73,7 +73,7 @@ func usage() {
   qpctl person list | show <name> | remove <name> --confirm <name>
 
   qpctl circle create <slug> --name "Display Name" [--quota 50G] [--mode bidirectional|send-only|receive-only] [--retention 30] [--exclude pat]...
-  qpctl circle list | show <slug> | set <slug> [--quota 50G] [--mode m] [--retention d] [--bwlimit spec] [--invites members|operator]
+  qpctl circle list | show <slug> | set <slug> [--quota 50G] [--mode m] [--retention d] [--bwlimit spec] [--invites members|operator] [--owner <person>|none]
   qpctl circle add-member <slug> <person> [--readonly] | remove-member <slug> <person>
   qpctl circle rotate-key <slug> --confirm <slug> [--yes]
   qpctl circle destroy <slug> --confirm <slug>
