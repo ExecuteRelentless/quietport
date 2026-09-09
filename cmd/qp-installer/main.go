@@ -31,9 +31,15 @@ var (
 
 var codeRe = regexp.MustCompile(`[a-z2-7]{26}`)
 
+var errNoBundled = errors.New("no bundled client")
+
 func main() {
 	agent.Version = Version
 	host, code := findInvite()
+	if len(os.Args) > 1 && os.Args[1] == "--print-invite" {
+		fmt.Printf("host=%s code=%s\n", host, code)
+		return
+	}
 	if code == "" {
 		link := askLink()
 		if link == "" {
@@ -74,6 +80,9 @@ func findInvite() (host, code string) {
 			break
 		}
 	}
+	if code == "" {
+		code = mountedImageCode()
+	}
 	host = originHost(exe)
 	return host, code
 }
@@ -99,19 +108,25 @@ func run(host, code string, support *string) error {
 		return errors.New("the application folder could not be created.")
 	}
 	client := &http.Client{Timeout: 10 * time.Minute}
-	arch := runtime.GOARCH
-	var url string
-	if runtime.GOOS == "windows" {
-		url = fmt.Sprintf("https://%s/dl/quietport-windows-%s.zip", host, arch)
-	} else {
-		url = fmt.Sprintf("https://%s/dl/quietport-darwin-%s.tar.gz", host, arch)
-	}
-	b, err := get(client, url)
-	if err != nil {
-		return errors.New("the download did not complete.")
-	}
-	if err := extract(b, app); err != nil {
-		return errors.New("the download was damaged.")
+	// Everything the client needs ships inside the installer; the hub is only asked for the personal payload.
+	if err := installBundled(app); err != nil {
+		if err != errNoBundled {
+			return errors.New("the bundled files could not be copied.")
+		}
+		arch := runtime.GOARCH
+		var url string
+		if runtime.GOOS == "windows" {
+			url = fmt.Sprintf("https://%s/dl/quietport-windows-%s.zip", host, arch)
+		} else {
+			url = fmt.Sprintf("https://%s/dl/quietport-darwin-%s.tar.gz", host, arch)
+		}
+		b, err := get(client, url)
+		if err != nil {
+			return errors.New("the download did not complete.")
+		}
+		if err := extract(b, app); err != nil {
+			return errors.New("the download was damaged.")
+		}
 	}
 	pl, err := get(client, fmt.Sprintf("https://%s/j/%s/payload", host, code))
 	if err != nil {

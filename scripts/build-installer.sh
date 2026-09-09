@@ -18,8 +18,18 @@ lipo -create -output "$OUT/quietport-installer" "$OUT/qpi-arm64" "$OUT/qpi-amd64
 rm "$OUT/qpi-arm64" "$OUT/qpi-amd64"
 
 APP="$OUT/Quietport Installer.app"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/client"
 mv "$OUT/quietport-installer" "$APP/Contents/MacOS/quietport-installer"
+
+echo "== bundle the whole client inside the app (universal binaries)"
+CA="$R/dist/$V/client-darwin-arm64"; CX="$R/dist/$V/client-darwin-amd64"
+[ -d "$CA" ] && [ -d "$CX" ] || { echo "run scripts/build.sh $V first (client bundles missing)"; exit 1; }
+for f in qpsync-agent qpctl rclone tailscaled tailscale; do
+  lipo -create -output "$APP/Contents/Resources/client/$f" "$CA/$f" "$CX/$f"
+done
+cp "$R/installers/mac/qp-sidebar" "$APP/Contents/Resources/client/qp-sidebar"
+echo "$V" > "$APP/Contents/Resources/client/VERSION"
+chmod 755 "$APP/Contents/Resources/client"/*
 cp "$R/installers/mac/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 cat > "$APP/Contents/Info.plist" <<X
 <?xml version="1.0" encoding="UTF-8"?>
@@ -41,6 +51,10 @@ cat > "$APP/Contents/Info.plist" <<X
 X
 echo "== sign (hardened runtime, timestamp)"
 xattr -cr "$APP"   # Documents/iCloud adds FinderInfo xattrs that codesign refuses
+# notarization requires every Mach-O inside the bundle to carry a hardened-runtime signature
+for f in qpsync-agent qpctl rclone tailscaled tailscale qp-sidebar; do
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP/Contents/Resources/client/$f"
+done
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
@@ -63,6 +77,22 @@ else
 fi
 (cd "$OUT" && COPYFILE_DISABLE=1 tar czf "$R/dist/$V/quietport-installer-darwin.tar.gz" "Quietport Installer.app")
 
-echo "== Windows installer exe"
+echo "== disk image (one file to download)"
+DMG="$OUT/Quietport Installer.dmg"
+rm -f "$DMG"; mkdir -p "$OUT/dmgroot"; rm -rf "$OUT/dmgroot"/*; cp -R "$APP" "$OUT/dmgroot/"
+hdiutil create -volname "Quietport Installer" -srcfolder "$OUT/dmgroot" -ov -format UDZO -quiet "$DMG"
+codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+  xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait | tail -3
+  xcrun stapler staple "$DMG"
+fi
+spctl -a -vv -t open --context context:primary-signature "$DMG" 2>&1 | tail -2 || true
+cp "$DMG" "$R/dist/$V/quietport-installer-darwin.dmg"
+
+echo "== Windows installer exe (client zip embedded)"
+WZ="$R/dist/$V/quietport-windows-amd64-$V.zip"
+[ -f "$WZ" ] || { echo "run scripts/build.sh $V first ($WZ missing)"; exit 1; }
+cp "$WZ" "$R/cmd/qp-installer/bundle.zip"
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LD -H windowsgui" -o "$R/dist/$V/quietport-installer-windows-amd64.exe" ./cmd/qp-installer
-ls -la "$R/dist/$V/quietport-installer-darwin.tar.gz" "$R/dist/$V/quietport-installer-windows-amd64.exe"
+rm -f "$R/cmd/qp-installer/bundle.zip"
+ls -la "$R/dist/$V/quietport-installer-darwin.tar.gz" "$R/dist/$V/quietport-installer-darwin.dmg" "$R/dist/$V/quietport-installer-windows-amd64.exe"

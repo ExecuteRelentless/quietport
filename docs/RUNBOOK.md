@@ -91,6 +91,20 @@ operator's Mac. Without it the backup is ciphertext.
 4. `sudo bash deploy/hub-install.sh` from a release tarball, then `sudo bash deploy/hub-configure.sh <hostname>`.
 5. Point DNS at the new IP. Members reconnect on their own; nothing on their side changes.
 
+
+## Installers (what members actually download)
+
+- Mac: `Quietport-<code>.dmg`, a notarized disk image holding `Quietport Installer.app`. The app carries the whole client
+  (qpsync-agent, rclone, tailscaled, tailscale, qp-sidebar, all universal, all signed) in `Contents/Resources/client`,
+  so the only thing it fetches from the hub is the invite payload. It reads the invite code from the disk image's file
+  name (via `hdiutil info`) or from the app folder name, and asks for the link if neither carries one.
+- Windows: `Quietport-<code>.exe`, the same installer with the client zip embedded (`go:embed`), no console window,
+  MessageBox dialogs. Unsigned (no Windows certificate): SmartScreen shows More info / Run anyway once.
+- Both still fall back to downloading the client bundle from `/dl/` if a build ships without the embedded files.
+- Build: `scripts/build.sh <v>` then `NOTARY_PROFILE=ari-notary scripts/build-installer.sh <v> <hub host>`;
+  publish with `deploy/publish-release.sh <v>` on the hub after copying `quietport-installer-darwin.dmg`,
+  `quietport-installer-darwin.tar.gz` and `quietport-installer-windows-amd64.exe` to `/tmp` there.
+
 ## Releases and self-update
 
 ```

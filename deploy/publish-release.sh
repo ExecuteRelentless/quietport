@@ -11,6 +11,7 @@ if [ -f /tmp/quietport-installer-darwin.tar.gz ]; then
   mv /tmp/quietport-installer-darwin.tar.gz /var/lib/quietport/releases/
 fi
 [ -f /tmp/quietport-installer-windows-amd64.exe ] && mv /tmp/quietport-installer-windows-amd64.exe /var/lib/quietport/releases/
+[ -f /tmp/quietport-installer-darwin.dmg ] && mv /tmp/quietport-installer-darwin.dmg /var/lib/quietport/releases/
 chown -R quietport:quietport /var/lib/quietport/releases
 ENV=$(cat /etc/quietport/hub.env | xargs)
 while read -r sha file sig; do

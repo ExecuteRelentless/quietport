@@ -84,12 +84,16 @@ func (h *Hub) routesPublic(mux *http.ServeMux) {
 	mux.HandleFunc("GET /j/{code}/QuietportInstall.cmd", h.inviteScript("wincmd"))
 	mux.HandleFunc("GET /j/{code}/payload", h.invitePayload)
 	mux.HandleFunc("GET /j/{code}/QuietportInstaller.zip", h.inviteInstallerMac)
-	mux.HandleFunc("GET /j/{code}/{exe}", func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.PathValue("exe"), "Quietport-") && strings.HasSuffix(r.PathValue("exe"), ".exe") {
+	mux.HandleFunc("GET /j/{code}/{file}", func(w http.ResponseWriter, r *http.Request) {
+		f := r.PathValue("file")
+		switch {
+		case strings.HasPrefix(f, "Quietport-") && strings.HasSuffix(f, ".exe"):
 			h.inviteInstallerWin(w, r)
-			return
+		case strings.HasPrefix(f, "Quietport-") && strings.HasSuffix(f, ".dmg"):
+			h.inviteInstallerDMG(w, r)
+		default:
+			http.NotFound(w, r)
 		}
-		http.NotFound(w, r)
 	})
 	mux.HandleFunc("GET /dl/{file}", h.download)
 }
@@ -151,7 +155,7 @@ func (h *Hub) invitePage(w http.ResponseWriter, r *http.Request) {
 	d := invitePageData{OS: detectOS(r.UserAgent()), Host: h.cfg.Host, Code: code, Operator: h.cfg.OperatorName, Support: h.cfg.SupportContact, Circles: circles}
 	d.Mac1 = fmt.Sprintf(`curl -fsSL https://%s/j/%s/mac | sh`, h.cfg.Host, code)
 	d.Win1 = fmt.Sprintf(`irm https://%s/j/%s/win | iex`, h.cfg.Host, code)
-	d.MacApp, d.WinApp = h.installerAvailable("mac"), h.installerAvailable("win")
+	d.MacApp, d.WinApp = h.installerAvailable("dmg"), h.installerAvailable("win")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	var buf bytes.Buffer

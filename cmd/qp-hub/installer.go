@@ -23,6 +23,10 @@ func (h *Hub) macInstallerDir() string {
 }
 
 func (h *Hub) installerAvailable(kind string) bool {
+	if kind == "dmg" {
+		_, err := os.Stat(filepath.Join(h.cfg.ReleasesDir, "quietport-installer-darwin.dmg"))
+		return err == nil
+	}
 	if kind == "mac" {
 		_, err := os.Stat(filepath.Join(h.macInstallerDir(), "Contents", "MacOS"))
 		return err == nil
@@ -106,3 +110,24 @@ func (h *Hub) inviteInstallerWin(w http.ResponseWriter, r *http.Request) {
 }
 
 var _ = strings.ToLower
+
+// inviteInstallerDMG: one file for the Mac. The notarized disk image is generic; the file name carries the code.
+func (h *Hub) inviteInstallerDMG(w http.ResponseWriter, r *http.Request) {
+	code, ok := h.inviteGate(w, r)
+	if !ok {
+		return
+	}
+	if _, live := h.db.InvitePeek(cryptobox.HashToken(code)); !live {
+		h.invitePlain(w, "gone")
+		return
+	}
+	f := filepath.Join(h.cfg.ReleasesDir, "quietport-installer-darwin.dmg")
+	if !h.installerAvailable("dmg") {
+		http.Error(w, "installer not published", 503)
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-apple-diskimage")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="Quietport-%s.dmg"`, code))
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeFile(w, r, f)
+}

@@ -22,3 +22,20 @@ func originHost(exe string) string {
 	}
 	return ""
 }
+
+// mountedImageCode: when the app runs from a disk image named Quietport-<code>.dmg, hdiutil knows the image path
+// even though the app itself only sees /Volumes/Quietport Installer (or a translocated copy of it).
+func mountedImageCode() string {
+	out, err := exec.Command("/usr/bin/hdiutil", "info").Output()
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "image-path") && strings.Contains(strings.ToLower(line), "quietport") {
+			if m := codeRe.FindString(strings.ToLower(line)); m != "" {
+				return m
+			}
+		}
+	}
+	return ""
+}

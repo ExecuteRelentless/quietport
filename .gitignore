@@ -1,2 +1,3 @@
 dist/
 *.tmp
+cmd/qp-installer/bundle.zip

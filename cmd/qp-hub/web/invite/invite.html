@@ -22,8 +22,8 @@ ol{padding-left:1.2rem;margin:0 0 1rem}ol li{margin-bottom:.5rem}
 <div class="brand">Quietport</div>
 <h1>{{.Operator}} has shared a private folder with you.</h1>
 {{if and (eq .OS "mac") .MacApp}}
-<p>Download Quietport, then open it from your Downloads folder and click Continue.</p>
-<a class="btn" href="/j/{{.Code}}/QuietportInstaller.zip" download>Download for Mac</a>
+<p>Download Quietport, open it from your Downloads folder, then open the Quietport Installer inside and click Continue.</p>
+<a class="btn" href="/j/{{.Code}}/Quietport-{{.Code}}.dmg" download>Download for Mac</a>
 <p>When it says <b>Quietport is connected</b>, your shared folder is in the Finder sidebar.</p>
 {{else if and (eq .OS "win") .WinApp}}
 <p>Download Quietport, then open it from your Downloads folder and click OK.</p>
@@ -35,7 +35,7 @@ ol{padding-left:1.2rem;margin:0 0 1rem}ol li{margin-bottom:.5rem}
 <p>When it says <b>Quietport is connected.</b>, look for the QPSync folder in File Explorer.</p>
 {{else}}<p>Open this link on the Mac or Windows computer where you want the folder to appear.</p>{{end}}
 <details><summary>Other options</summary>
-{{if .MacApp}}<p>Mac: <a href="/j/{{.Code}}/QuietportInstaller.zip">download the installer</a>, or paste this in Terminal:</p>{{else}}<p>Mac, paste this in Terminal:</p>{{end}}<pre>{{.Mac1}}</pre>
+{{if .MacApp}}<p>Mac: <a href="/j/{{.Code}}/Quietport-{{.Code}}.dmg">download the installer</a>, or paste this in Terminal:</p>{{else}}<p>Mac, paste this in Terminal:</p>{{end}}<pre>{{.Mac1}}</pre>
 {{if .WinApp}}<p>Windows: <a href="/j/{{.Code}}/Quietport-{{.Code}}.exe">download the installer</a>, or paste this in PowerShell:</p>{{else}}<p>Windows, paste this in PowerShell:</p>{{end}}<pre>{{.Win1}}</pre>
 <p class="small">The link works once and expires after 24 hours. Questions: {{.Support}}</p></details>
 </main></body></html>
