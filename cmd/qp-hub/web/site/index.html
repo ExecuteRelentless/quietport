@@ -36,25 +36,25 @@ nav a{font-size:.95rem;color:var(--ink-2);text-decoration:none}
 nav a:hover{color:var(--ink)}
 h1,h2,h3{font-family:var(--display);letter-spacing:-.03em;line-height:1;margin:0;text-wrap:balance}
 h1{font-weight:500;font-size:clamp(2.6rem,6.2vw,4.6rem)}
-h2{font-weight:500;font-size:clamp(2rem,4.4vw,3rem);margin-bottom:1rem}
+h2{font-weight:500;font-size:clamp(2rem,4.4vw,3rem);margin-bottom:.7rem}
 h3{font-weight:600;font-size:1.25rem;letter-spacing:-.02em}
 p{margin:0 0 1rem}
 .muted{color:var(--ink-2)}
 .btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;padding:.9rem 1.4rem;border-radius:999px;font-weight:600;font-size:1rem;transition:transform .15s ease, box-shadow .15s ease}
 .btn:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(36,87,245,.28)}
-.eyebrow{font-size:.8rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:.9rem}
+.eyebrow{font-size:.8rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:.6rem}
 
 /* hero */
-.hero{padding:4.5rem 0 3rem}
-.hero .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:3rem;align-items:center}
-.hero p{font-size:1.15rem;max-width:30rem}
-.scene{background:var(--card);border-radius:28px;box-shadow:var(--shadow);padding:1.25rem;overflow:hidden}
+.hero{padding:2.2rem 0 1.6rem}
+.hero .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:2rem;align-items:center}
+.hero p{font-size:1.15rem;max-width:30rem;margin-bottom:1.2rem}
+.scene{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:1rem;overflow:hidden}
 .scene svg{width:100%;height:auto;display:block}
-.scene-cap{font-size:.85rem;color:var(--ink-2);margin:.8rem .25rem 0}
+.scene-cap{font-size:.85rem;color:var(--ink-2);margin:.5rem .25rem 0}
 
 /* steps */
-.steps{padding:3.5rem 0}
-.step{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr);gap:2.5rem;align-items:center;padding:2.5rem 0;border-top:1px solid var(--line)}
+.steps{padding:1.6rem 0 .6rem}
+.step{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr);gap:1.75rem;align-items:center;padding:1.4rem 0;border-top:1px solid var(--line)}
 .step:first-of-type{border-top:0}
 .step .n{font-family:var(--display);font-weight:600;font-size:.95rem;color:var(--accent);margin-bottom:.6rem}
 .step h3{font-size:1.7rem;margin-bottom:.7rem}
@@ -66,7 +66,7 @@ p{margin:0 0 1rem}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.72}}
 
 /* installer dialog animation: ask (0-35%) -> progress (35-60%) -> connected (60-100%) on a 9s loop */
-.dlg-stage{position:relative;background:linear-gradient(160deg,#dfe6f3,#eef1f7);border-radius:20px;box-shadow:var(--shadow);min-height:15rem;display:flex;align-items:center;justify-content:center;padding:1.5rem;overflow:hidden}
+.dlg-stage{position:relative;background:linear-gradient(160deg,#dfe6f3,#eef1f7);border-radius:20px;box-shadow:var(--shadow);min-height:13rem;display:flex;align-items:center;justify-content:center;padding:1.5rem;overflow:hidden}
 .dlg{position:absolute;width:min(22rem,86%);background:#fff;color:#1d1d1f;border-radius:14px;padding:1.2rem 1.2rem 1rem;box-shadow:0 20px 50px rgba(15,22,38,.22);font-size:.92rem;line-height:1.4}
 .dlg b{display:block;font-weight:600;margin-bottom:.3rem}
 .dlg p{margin:0 0 .9rem;color:#5b6478;font-size:.86rem}
@@ -89,7 +89,7 @@ p{margin:0 0 1rem}
 /* finder */
 .finder{background:#fff;border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
 .finder img{display:block;width:100%;height:auto}
-.finder .pane{position:relative;height:14rem;background:#fff;padding:1.4rem 1.6rem 3.6rem;display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap}
+.finder .pane{position:relative;height:12.5rem;background:#fff;padding:1.4rem 1.6rem 3.6rem;display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap}
 .folder{width:5.4rem;text-align:center;font-size:.85rem;color:#1d1d1f;opacity:0;transform:translateY(10px) scale(.9);animation:pop .6s cubic-bezier(.2,.8,.2,1) forwards}
 .folder svg{width:4.2rem;height:auto;display:block;margin:0 auto .35rem}
 .folder:nth-child(1){animation-delay:.6s}.folder:nth-child(2){animation-delay:1.5s}
@@ -97,9 +97,9 @@ p{margin:0 0 1rem}
 @keyframes pop{to{opacity:1;transform:none}}
 
 /* circles explainer */
-.circles{padding:3.5rem 0 2rem}
+.circles{padding:1.6rem 0 1rem}
 .circles .intro{max-width:34rem;color:var(--ink-2)}
-.board{background:var(--card);border-radius:28px;box-shadow:var(--shadow);padding:1.75rem;margin-top:1.75rem;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:2rem;align-items:start}
+.board{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:1.25rem;margin-top:1rem;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:2rem;align-items:start}
 .legend{display:grid;gap:.75rem}
 .legend div{display:flex;align-items:center;gap:.75rem;padding:.75rem .9rem;border-radius:14px;border:1px solid var(--line);transition:background .4s,border-color .4s}
 .legend i{width:14px;height:14px;border-radius:50%;display:block;flex:none}
@@ -125,8 +125,8 @@ p{margin:0 0 1rem}
 .board-cap{grid-column:1/-1;font-size:.9rem;color:var(--ink-2);margin:0;padding-top:.5rem;border-top:1px solid var(--line)}
 
 /* download */
-.download{padding:3rem 0 4.5rem}
-.download .lead{max-width:34rem;color:var(--ink-2);margin-bottom:1.75rem}
+.download{padding:1.6rem 0 2.5rem}
+.download .lead{max-width:34rem;color:var(--ink-2);margin-bottom:1.1rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1rem}
 .card{background:var(--card);border-radius:20px;padding:1.4rem;box-shadow:var(--shadow)}
 .card h3{margin-bottom:.7rem}
@@ -134,7 +134,7 @@ p{margin:0 0 1rem}
 .card a:first-of-type{border-top:0}
 .card a span{color:var(--ink-2);font-size:.85rem;margin-left:.5rem}
 .card a:hover{color:var(--accent)}
-footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
+footer{padding:0 0 1.6rem;font-size:.85rem;color:var(--ink-2)}
 
 /* hero animation */
 .pkt{animation:travel 7s ease-in-out infinite}
@@ -148,9 +148,9 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
 
 @media (max-width:52rem){
   .hero .wrap,.step,.board{grid-template-columns:1fr}
-  .hero{padding:3rem 0 2rem}
+  .hero{padding:1.6rem 0 1.2rem}
   .people{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .step{gap:1.4rem}
+  .step{gap:1rem;padding:1.1rem 0}
 }
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
@@ -171,7 +171,7 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
   <div>
     <div class="eyebrow">Private, invite only</div>
     <h1>A shared folder no one else can read.</h1>
-    <p style="margin-top:1.3rem">Quietport creates a shared folder on the computers of the people you have invited. What goes in it is encrypted before it leaves your machine, so the server in the middle cannot decrypt anything it stores.</p>
+    <p style="margin-top:1rem">Quietport puts a folder on the computers of the people you invite. Everything in it is locked before it leaves your Mac or PC. The server in the middle never sees a thing.</p>
     <a class="btn" href="#how">See how it works</a>
   </div>
   <div class="scene">
@@ -213,21 +213,21 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
       <path d="M178 118 H225" stroke="#c9d0dd" stroke-width="2" stroke-dasharray="4 4"/>
       <path d="M295 118 H342" stroke="#c9d0dd" stroke-width="2" stroke-dasharray="4 4"/>
     </svg>
-    <p class="scene-cap">Drop a file in. It is locked on your computer, passes through the hub as gibberish, and unlocks only inside the same folder on the other side.</p>
+    <p class="scene-cap">Drop in a file. It locks on your computer, travels as gibberish, and unlocks only for the people in that folder.</p>
   </div>
 </div></section>
 
 <section class="steps" id="how"><div class="wrap">
   <div class="eyebrow">How it works</div>
-  <h2>3 steps, no account.</h2>
+  <h2>3 steps. No account.</h2>
 
   <div class="step">
-    <div><div class="n">Step 1</div><h3>Someone sends you a link.</h3><p>Every invite is made for 1 person and carries only the folders meant for them. It works once and expires after 24 hours. The page has 1 button: Download.</p></div>
+    <div><div class="n">Step 1</div><h3>Get a link.</h3><p>Someone invites you. The link is made just for you, works once, and has 1 button.</p></div>
     <div class="shot"><div class="chip">https://quietport.app/j/<b>fbco4tqe5qh5wwfibe2oiuypfu</b></div><img src="/assets/invite-page.png" width="1800" height="1040" alt="The invite page: a headline saying a private folder has been shared with you, and a Download button"></div>
   </div>
 
   <div class="step">
-    <div><div class="n">Step 2</div><h3>Open it and click Continue.</h3><p>There is nothing to sign up for and nothing to type. You open the download from your Downloads folder, click Continue, and Quietport installs itself in less than 60 seconds. No administrator password, nothing outside your own user folder.</p></div>
+    <div><div class="n">Step 2</div><h3>Open. Click Continue.</h3><p>No sign-up. No password. Nothing to type. About a minute.</p></div>
     <div class="dlg-stage" role="img" aria-label="An installer dialog asks to continue, then reports Quietport is connected.">
       <div class="dlg d1"><div class="dlg-icon"></div><b>Quietport will set up your shared folder now.</b><p>It takes about a minute and needs no password.</p><div class="dlg-btns"><span>Cancel</span><span class="primary">Continue</span></div></div>
       <div class="dlg d2"><div class="dlg-icon ok"></div><b>Quietport is connected.</b><p>Your shared folder is called QPSync and is pinned in the Finder sidebar.</p><div class="dlg-btns"><span>OK</span><span class="primary">Open Folder</span></div></div>
@@ -236,7 +236,7 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
   </div>
 
   <div class="step">
-    <div><div class="n">Step 3</div><h3>A folder appears.</h3><p>You don't need to learn a special application, because there isn't one. QPSync shows up in Finder or File Explorer with 1 folder per circle you were invited to, and it works like any other folder on your computer.</p></div>
+    <div><div class="n">Step 3</div><h3>Your folder is ready.</h3><p>It shows up in Finder or File Explorer, 1 folder for each circle you are in. It works like any other folder. There is no app to learn.</p></div>
     <div class="finder" role="img" aria-label="A Finder window titled QPSync in which 2 folders appear">
       <img src="/assets/finder-chrome.png" width="1800" height="205" alt="">
       <div class="pane">
@@ -250,8 +250,8 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
 
 <section class="circles" id="circles"><div class="wrap">
   <div class="eyebrow">Circles</div>
-  <h2>1 circle, 1 folder, 1 key.</h2>
-  <p class="intro">Sharing is organised in circles. A circle is 1 shared folder with 1 list of members and 1 key of its own. Run as many as you like. A person can belong to several, and each circle they are in shows up as its own folder. A circle they are not in does not show up at all, and nothing on their machine can tell it exists.</p>
+  <h2>1 circle. 1 folder. 1 key.</h2>
+  <p class="intro">A circle is a folder shared with the people you choose. Make as many as you like. Be in as many as you like. Each one is its own folder on your computer. A circle you are not in does not exist for you.</p>
   <div class="board" aria-label="Three circles and four people; the highlight moves from circle to circle showing which folders each person sees">
     <div class="legend">
       <div class="ca"><i></i><div><span>Circle A</span><small>3 members</small></div></div>
@@ -264,14 +264,14 @@ footer{padding:0 0 3rem;font-size:.85rem;color:var(--ink-2)}
       <div class="person"><div class="avatar">2</div><b>Person 2</b><div class="fold ca"><i></i>Circle A</div><div class="fold cb"><i></i>Circle B</div></div>
       <div class="person"><div class="avatar">3</div><b>Person 3</b><div class="fold cc"><i></i>Circle C</div><div class="fold none">nothing else</div></div>
     </div>
-    <p class="board-cap">Person 3 has 1 folder and no way of knowing Circle A or Circle B exist. You, as the operator, are in all 3.</p>
+    <p class="board-cap">Person 3 sees 1 folder. Circles A and B do not exist for them. You are in all 3.</p>
   </div>
 </div></section>
 
 <section class="download" id="download"><div class="wrap">
   <div class="eyebrow">Download</div>
   <h2>Run your own.</h2>
-  <p class="lead">Members download nothing here. Their invite link fetches the right version of Quietport for their computer. These downloads are for people who want to run a Quietport of their own, and for anyone who prefers to fetch the client by hand.</p>
+  <p class="lead">Members don't need this page. Their link does the work. These are for running a Quietport of your own.</p>
   <div class="grid">
     <div class="card"><h3>Mac</h3>
       <a href="/dl/quietport-darwin-arm64.tar.gz">Apple silicon <span>.tar.gz</span></a>
