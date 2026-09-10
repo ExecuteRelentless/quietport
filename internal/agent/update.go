@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -102,6 +103,9 @@ func (a *Agent) applyUpdate(ctx context.Context, u model.UpdateInfo) {
 	if ReleasePubKey == "" {
 		a.logf("update available (%s) but this build has no release key; skipping", u.Version)
 		return
+	}
+	if u.Version == Version || !semverNewer(u.Version, Version) {
+		return // never fetch what is already running
 	}
 	if s, ok := readUpdateState(); ok && s.Version == u.Version && time.Since(s.At) < time.Hour {
 		return
@@ -238,3 +242,19 @@ func extract(b []byte, dir string) error {
 }
 
 var _ = syscall.Getpid
+
+// semverNewer: a > b on the first 3 numeric parts; anything beats a "dev" build.
+func semverNewer(a, b string) bool {
+	parts := func(s string) [3]int {
+		var p [3]int
+		fmt.Sscanf(strings.TrimPrefix(s, "v"), "%d.%d.%d", &p[0], &p[1], &p[2])
+		return p
+	}
+	pa, pb := parts(a), parts(b)
+	for i := 0; i < 3; i++ {
+		if pa[i] != pb[i] {
+			return pa[i] > pb[i]
+		}
+	}
+	return false
+}

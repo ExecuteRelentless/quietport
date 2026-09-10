@@ -158,6 +158,9 @@ func (h *Hub) handleHeartbeat(w http.ResponseWriter, r *http.Request, dev model.
 	remoteIP, _, _ := net.SplitHostPort(r.RemoteAddr)
 	_ = h.db.HeartbeatAdd(dev.ID, hb)
 	_ = h.db.DeviceTouch(dev.ID, hb.AgentVersion, remoteIP, 0)
+	if hb.AgentVersion != "" {
+		dev.AgentVersion = hb.AgentVersion // the bundle's update check must see what runs now, not the last heartbeat
+	}
 	if hb.ClientTime.IsZero() == false && absDur(time.Since(hb.ClientTime)) > 5*time.Minute {
 		h.db.Event("clock_skew", dev.PersonID, dev.ID, fmt.Sprintf("client clock off by %s", time.Since(hb.ClientTime).Round(time.Second)))
 	}

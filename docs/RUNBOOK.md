@@ -150,6 +150,10 @@ operator's Mac. Without it the backup is ciphertext.
 - Linux (best effort): `quietport-installer-linux-<arch>`, client tarball embedded, prompts in the terminal, installs a
   systemd user unit. Run it as `./Quietport-linux-amd64` (no invite in the name: it asks for the link or offers to start a folder).
 - Both still fall back to downloading the client bundle from `/dl/` if a build ships without the embedded files.
+- Self-update (0.1.13+) downloads to `update-<version>.part` in the app dir, resumes with HTTP Range across heartbeats
+  and gives up only after 3 minutes without a byte, so a slow or relayed link finishes over a few cycles. Agents on
+  0.1.12 or older had a 90 s cap and cannot fetch a 50 MB bundle over a slow link: place the bundle by hand (copy
+  `dist/<v>/client-<os>-<arch>/*` over the app dir, restart the agent) or re-run the installer.
 - Build: `scripts/build.sh <v>` then `NOTARY_PROFILE=ari-notary scripts/build-installer.sh <v> <hub host>`;
   publish with `deploy/publish-release.sh <v>` on the hub after copying `quietport-installer-darwin.dmg`,
   `quietport-installer-darwin.tar.gz` and `quietport-installer-windows-amd64.exe` to `/tmp` there.
