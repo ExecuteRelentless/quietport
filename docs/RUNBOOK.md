@@ -150,6 +150,11 @@ operator's Mac. Without it the backup is ciphertext.
 - Linux (best effort): `quietport-installer-linux-<arch>`, client tarball embedded, prompts in the terminal, installs a
   systemd user unit. Run it as `./Quietport-linux-amd64` (no invite in the name: it asks for the link or offers to start a folder).
 - Both still fall back to downloading the client bundle from `/dl/` if a build ships without the embedded files.
+- Every folder carries a hidden `.quietport` file (0.1.14+). rclone bisync refuses to run against a prior listing with
+  no files in it ("empty prior Path1 listing"), so a folder nobody has filled yet failed every cycle, counted as an
+  error and would have raised the "not updated for a week" notice. The marker keeps listings non-empty; the agent also
+  treats that abort as "run a full sync next" instead of a failure. If a member deletes the marker it comes back on the
+  next cycle.
 - Self-update (0.1.13+) downloads to `update-<version>.part` in the app dir, resumes with HTTP Range across heartbeats
   and gives up only after 3 minutes without a byte, so a slow or relayed link finishes over a few cycles. Agents on
   0.1.12 or older had a 90 s cap and cannot fetch a 50 MB bundle over a slow link: place the bundle by hand (copy

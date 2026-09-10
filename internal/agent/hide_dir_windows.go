@@ -7,3 +7,9 @@ func hideDir(p string) {
 		_ = windows.SetFileAttributes(u, windows.FILE_ATTRIBUTE_HIDDEN|windows.FILE_ATTRIBUTE_DIRECTORY)
 	}
 }
+
+func hideFile(p string) {
+	if u, err := windows.UTF16PtrFromString(p); err == nil {
+		_ = windows.SetFileAttributes(u, windows.FILE_ATTRIBUTE_HIDDEN)
+	}
+}

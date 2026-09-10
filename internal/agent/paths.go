@@ -12,6 +12,7 @@ const (
 	ServiceName = "Quietport"
 	SyncDirName = "QPSync"
 	VersionsDir = ".qp-versions"
+	MarkerFile  = ".quietport" // synced like any file so a folder is never "empty" to bisync (rclone refuses header-only listings)
 )
 
 func home() string {
@@ -55,10 +56,10 @@ func exe(name string) string {
 	return name
 }
 
-func AgentBin() string     { return filepath.Join(AppDir(), exe("qpsync-agent")) }
-func RcloneBin() string    { return filepath.Join(AppDir(), exe("rclone")) }
+func AgentBin() string      { return filepath.Join(AppDir(), exe("qpsync-agent")) }
+func RcloneBin() string     { return filepath.Join(AppDir(), exe("rclone")) }
 func TailscaledBin() string { return filepath.Join(AppDir(), exe("tailscaled")) }
-func TailscaleBin() string { return filepath.Join(AppDir(), exe("tailscale")) }
+func TailscaleBin() string  { return filepath.Join(AppDir(), exe("tailscale")) }
 
 // TSSocket: macOS unix sockets are limited to 104 bytes of path, so keep it short; Windows uses a private named pipe
 // (the default pipe name is admin-only, which is exactly what we must avoid: C-2).

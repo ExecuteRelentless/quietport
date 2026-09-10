@@ -224,7 +224,27 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 	ak, sk := a.store.CircleS3(c)
 	cfg := a.store.Config()
 	mode := a.effectiveMode(c)
+	if mode != "pull" {
+		ensureMarker(CircleDir(c.DisplayName))
+	}
 	res := a.rc.Sync(ctx, c, key, ak, sk, cfg.S3Endpoint, mode, c.Resync)
+	// rclone 1.75 aborts a bisync whose prior listing has no files ("empty prior Path1 listing"), which is exactly the
+	// state of a folder nobody has put anything in yet. Nothing is corrupt: run the next cycle as a full sync (copies
+	// both ways, deletes nothing), and do not count it as a failure.
+	emptyListing := !res.OK && mode == "bisync" && strings.Contains(res.Output, "empty prior Path")
+	if emptyListing {
+		if !c.Resync {
+			a.logf("%s: folder was empty at the last sync, next cycle is a full sync", c.Slug)
+			_ = a.store.Update(func(cf *Config) {
+				for i := range cf.Circles {
+					if cf.Circles[i].Slug == c.Slug {
+						cf.Circles[i].Resync = true
+					}
+				}
+			})
+		}
+		return
+	}
 	a.stMu.Lock()
 	h := a.st.Circles[c.Slug]
 	h.Generation = c.Generation
@@ -629,5 +649,19 @@ func (a *Agent) longPaths(ctx context.Context) {
 				}
 			}
 		})
+	}
+}
+
+// ensureMarker keeps a small hidden file in every folder so its listing is never empty (see MarkerFile).
+func ensureMarker(dir string) {
+	p := filepath.Join(dir, MarkerFile)
+	if _, err := os.Stat(p); err == nil {
+		return
+	}
+	if _, err := os.Stat(dir); err != nil {
+		return // folder not there yet (or gone); nothing to mark
+	}
+	if err := os.WriteFile(p, []byte("Quietport keeps this file here so the folder stays in sync even while it is empty.\n"), 0o644); err == nil {
+		hideFile(p)
 	}
 }
