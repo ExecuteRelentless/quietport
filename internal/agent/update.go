@@ -106,8 +106,9 @@ func (a *Agent) applyUpdate(ctx context.Context, u model.UpdateInfo) {
 	if s, ok := readUpdateState(); ok && s.Version == u.Version && time.Since(s.At) < time.Hour {
 		return
 	}
+	part := filepath.Join(AppDir(), "update-"+u.Version+".part")
 	a.logf("downloading update %s", u.Version)
-	body, hdr, err := a.hub.Download(ctx, u.URL)
+	body, hdr, err := a.hub.Download(ctx, u.URL, part)
 	if err != nil {
 		a.logf("update download: %v", err)
 		return
@@ -115,8 +116,10 @@ func (a *Agent) applyUpdate(ctx context.Context, u model.UpdateInfo) {
 	sum := cryptobox.SHA256Hex(body)
 	if sum != u.SHA256 || (hdr.Get("X-Quietport-SHA256") != "" && hdr.Get("X-Quietport-SHA256") != sum) {
 		a.logf("update rejected: checksum mismatch")
+		_ = os.Remove(part)
 		return
 	}
+	_ = os.Remove(part)
 	if !cryptobox.Verify(ReleasePubKey, []byte(sum), u.Sig) {
 		a.logf("update rejected: bad signature")
 		return

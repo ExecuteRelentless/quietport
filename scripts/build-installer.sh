@@ -86,6 +86,9 @@ codesign --force --timestamp --sign "$IDENTITY" "$DMG"
 if [ -n "${NOTARY_PROFILE:-}" ]; then
   xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait | tail -3
   xcrun stapler staple "$DMG"
+elif [ -n "${NOTARY_KEY:-}" ] && [ -n "${NOTARY_KEY_ID:-}" ] && [ -n "${NOTARY_ISSUER:-}" ]; then
+  xcrun notarytool submit "$DMG" --key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" --wait | tail -3
+  xcrun stapler staple "$DMG"
 fi
 spctl -a -vv -t open --context context:primary-signature "$DMG" 2>&1 | tail -2 || true
 cp "$DMG" "$R/dist/$V/quietport-installer-darwin.dmg"

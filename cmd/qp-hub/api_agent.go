@@ -47,6 +47,7 @@ func (h *Hub) routesAgent(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/heartbeat", h.withDevice(h.handleHeartbeat))
 	mux.HandleFunc("GET /v1/update/{os}/{arch}", h.withDevice(h.handleUpdateDownload))
 	mux.HandleFunc("POST /v1/invites", h.withDevice(h.handleDeviceInvite))
+	mux.HandleFunc("POST /v1/circles", h.withDevice(h.handleDeviceCircleCreate))
 	mux.HandleFunc("GET /v1/circles/{id}/people", h.withDevice(h.handleCirclePeople))
 	mux.HandleFunc("POST /v1/circles/{id}/remove", h.withDevice(h.handleCircleRemovePerson))
 	mux.HandleFunc("POST /v1/circles/{id}/opkey", h.withDevice(h.handleCircleOpKeyDevice))
@@ -511,4 +512,88 @@ func (h *Hub) handleCircleGrantsDevice(w http.ResponseWriter, r *http.Request, d
 		}
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "count": len(gs)})
+}
+
+// handleDeviceCircleCreate: a member starts another folder from their own computer. The device generates the key;
+// the hub only makes the bucket, the storage credentials and the record, and makes the person its owner.
+func (h *Hub) handleDeviceCircleCreate(w http.ResponseWriter, r *http.Request, dev model.Device) {
+	if h.db.Setting("member_circles") == "0" {
+		writeErr(w, 403, "only the operator can create folders on this Quietport")
+		return
+	}
+	var in struct{ Name string }
+	if err := readJSON(r, &in); err != nil {
+		writeErr(w, 400, "bad request")
+		return
+	}
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		writeErr(w, 400, "give the folder a name")
+		return
+	}
+	if len(name) > 40 {
+		name = name[:40]
+	}
+	person, err := h.db.PersonByID(dev.PersonID)
+	if err != nil || person.Status != model.StatusActive {
+		writeErr(w, 403, "not active")
+		return
+	}
+	if h.gar == nil {
+		writeErr(w, 500, "storage not configured")
+		return
+	}
+	// a person may own at most 10 folders here; the operator can raise it
+	own := 0
+	if cs, err := h.db.Circles(); err == nil {
+		for _, c := range cs {
+			if c.OwnerPersonID == person.ID {
+				own++
+			}
+		}
+	}
+	maxOwn := 10
+	if v := h.db.Setting("max_member_circles"); v != "" {
+		fmt.Sscanf(v, "%d", &maxOwn)
+	}
+	if own >= maxOwn {
+		writeErr(w, 403, fmt.Sprintf("you already own %d folders here", own))
+		return
+	}
+	cslug := strings.Trim(nameSlugRe.ReplaceAllString(strings.ToLower(name), "-"), "-")
+	if cslug == "" {
+		cslug = "folder"
+	}
+	cslug += "-" + strings.ToLower(cryptobox.NewInviteCode()[:4])
+	quota := int64(5 << 30)
+	if v := h.db.Setting("signup_quota"); v != "" {
+		fmt.Sscanf(v, "%d", &quota)
+	}
+	bucket := "qp-" + cslug
+	b, err := h.gar.BucketCreate(bucket, quota)
+	if err != nil {
+		writeErr(w, 500, "storage: "+err.Error())
+		return
+	}
+	k, err := h.gar.KeyCreate(bucket+"-members", b.ID, false)
+	if err != nil {
+		writeErr(w, 500, "storage key: "+err.Error())
+		return
+	}
+	c, err := h.db.CircleCreate(model.Circle{Slug: cslug, DisplayName: name, BucketPrefix: bucket, QuotaBytes: quota, SyncMode: model.ModeBidirectional, InvitePolicy: model.InviteByMembers, OwnerPersonID: person.ID}, k.AccessKeyID, k.SecretAccessKey)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	_ = h.db.MemberAdd(person.ID, c.ID, "member")
+	h.db.Audit("device:"+strconv.FormatInt(dev.ID, 10)+"/"+person.Name, "circle.create", c.Slug, fmt.Sprintf("by member %q quota=%d", name, quota))
+	h.db.Event("circle.created", person.ID, dev.ID, fmt.Sprintf("%s started folder %q (%s)", person.Name, name, c.Slug))
+	cfg, _ := h.configBundle(person, dev)
+	for _, cc := range cfg.Circles {
+		if cc.ID == c.ID {
+			writeJSON(w, 201, cc)
+			return
+		}
+	}
+	writeErr(w, 500, "created but not found")
 }

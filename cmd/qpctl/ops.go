@@ -349,7 +349,7 @@ func cmdSettings(args []string) error {
 	for _, a := range args {
 		k, v, ok := strings.Cut(a, "=")
 		if !ok {
-			return errors.New("usage: qpctl settings key=value ...  (sync_interval=60, open_signup=1|0, signup_quota=<bytes>)")
+			return errors.New("usage: qpctl settings key=value ...  (sync_interval=60, open_signup=1|0, signup_quota=<bytes>, member_circles=1|0, max_member_circles=N)")
 		}
 		kv[k] = v
 	}

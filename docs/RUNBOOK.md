@@ -54,6 +54,14 @@ person record from the typed name (no email), a mesh user and a pre-auth key. Wo
   as `<name>-xxxx` with no email, `qpctl logs <inviter>` shows `invite.created`.
 - Undo: `qpctl invite revoke <prefix>` before it is used; `qpctl offboard <person> --confirm <person>` after.
 
+The same page has **Start a new folder** (0.1.12+): a member types a name, the hub makes a bucket with `signup_quota`
+bytes, storage credentials and the circle record with that person as owner, and the member's device generates the
+circle key (the hub and the operator keystore never hold it, same caveat as open signup). The folder appears in QPSync
+on that computer at once; the member then invites people to it from the picker at the top of the page. Off switch:
+`qpctl settings member_circles=0`; cap per person: `max_member_circles=N` (default 10). Audit: `circle.create` by
+`device:<id>/<name>`; events: `circle.created`. The operator can still create circles with `qpctl circle create`
+(those keys do go into the keystore).
+
 
 ## Open signup (strangers can start their own folder)
 

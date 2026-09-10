@@ -95,6 +95,16 @@ button.quiet{background:#eef0f5;color:#0f1626}
 <div class="err" id="err" hidden></div>
 {{end}}
 </div>
+<div class="card" style="margin-top:1.2rem">
+<form id="nf" method="post" action="/circles">
+<input type="hidden" name="t" value="{{.Token}}">
+<label for="nfname">Start a new folder</label>
+<input type="text" id="nfname" name="name" placeholder="Name the folder" maxlength="40" autocomplete="off">
+<button type="submit" class="quiet">Create folder</button>
+<p class="hint">It appears in QPSync on this computer right away. Then pick it above to invite people.</p>
+<div class="err" id="nferr" hidden></div>
+</form>
+</div>
 {{range .Owned}}
 <div class="card" style="margin-top:1.2rem">
 <label>People in {{.DisplayName}}</label>
@@ -122,6 +132,11 @@ async function loadPeople(box){const cid=box.dataset.circle;const r=await fetch(
     alert(jj.result||jj.error||'Done');loadPeople(box)};row.appendChild(b)}
   box.appendChild(row)})}
 document.querySelectorAll('.people').forEach(loadPeople);
+const nf=document.getElementById('nf');
+if(nf){nf.addEventListener('submit',async e=>{e.preventDefault();const b=nf.querySelector('button');b.disabled=true;b.textContent='Creating…';
+ const r=await fetch('/circles',{method:'POST',body:new FormData(nf)});const j=await r.json();b.disabled=false;b.textContent='Create folder';
+ const err=document.getElementById('nferr');if(!r.ok){err.textContent=j.error||'Something went wrong.';err.hidden=false;return}
+ location.reload()});}
 </script></body></html>`))
 
 type uiCircle struct {
@@ -176,6 +191,19 @@ func (a *Agent) serveLocalUI(ctx context.Context, port int, token string) int {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = uiTmpl.Execute(w, map[string]any{"Token": token, "Circles": cs, "Owned": owned})
+	})
+	mux.HandleFunc("POST /circles", func(w http.ResponseWriter, r *http.Request) {
+		if !check(w, r) {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		name, err := a.createCircle(r.Context(), strings.TrimSpace(r.FormValue("name")))
+		if err != nil {
+			w.WriteHeader(400)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"created": name})
 	})
 	mux.HandleFunc("GET /people", func(w http.ResponseWriter, r *http.Request) {
 		if !check(w, r) {

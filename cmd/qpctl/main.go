@@ -91,6 +91,7 @@ func usage() {
   qpctl keys export --out FILE | split --out DIR [--shares 5] [--threshold 3] | recover --bundle FILE --share F... --out FILE | verify [--bundle FILE]
   qpctl audit [--limit 200]
   qpctl settings open_signup=1|0 signup_quota=<bytes>     let strangers start their own folder from the installer
+  qpctl settings member_circles=1|0 max_member_circles=N   let members start folders from Share a folder (default on, 10 each)
 `)
 	os.Exit(2)
 }

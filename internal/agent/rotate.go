@@ -139,4 +139,37 @@ func (a *Agent) rotate(ctx context.Context, circleID int64, people []model.Circl
 	return time.Since(start), nil
 }
 
-var _ = os.Getenv
+
+// createCircle: this computer generates the key for a brand-new folder and registers it with the hub.
+func (a *Agent) createCircle(ctx context.Context, name string) (string, error) {
+	var cc model.CircleConfig
+	if err := a.hub.do(ctx, "POST", "/v1/circles", map[string]string{"name": name}, &cc); err != nil {
+		if he, ok := err.(*HubError); ok {
+			return "", errors.New(he.Msg)
+		}
+		return "", errors.New("the hub could not be reached; try again in a minute")
+	}
+	key := model.CircleKey{Slug: cc.Slug, Generation: cc.Generation, Password: cryptobox.NewCircleSecret(), Salt: cryptobox.NewCircleSecret()}
+	sealed, err := a.store.Seal(key)
+	if err != nil {
+		return "", err
+	}
+	s3, _ := a.store.Seal([2]string{cc.S3AccessKey, cc.S3SecretKey})
+	_ = a.store.Update(func(c *Config) {
+		for i := range c.Circles {
+			if c.Circles[i].ID == cc.ID { // a heartbeat got there first; give it the key
+				c.Circles[i].KeySealed, c.Circles[i].KeyGen, c.Circles[i].Resync = sealed, cc.Generation, true
+				return
+			}
+		}
+		c.Circles = append(c.Circles, CircleState{CircleConfig: cc, KeySealed: sealed, KeyGen: cc.Generation, S3Sealed: s3, Resync: true})
+	})
+	_ = os.MkdirAll(CircleDir(cc.DisplayName), 0o755)
+	a.refreshWatches()
+	select {
+	case a.syncNow <- cc.Slug:
+	default:
+	}
+	a.logf("%s: new folder %q created from this computer", cc.Slug, cc.DisplayName)
+	return cc.DisplayName, nil
+}
