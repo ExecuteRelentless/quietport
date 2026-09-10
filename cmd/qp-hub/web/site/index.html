@@ -241,6 +241,10 @@ body.anim .board.in .person:nth-child(3){transition-delay:.16s}
 body.anim .board.in .person:nth-child(4){transition-delay:.24s}
 
 @media (max-width:52rem){
+  nav .wrap{flex-wrap:wrap;height:auto;padding-top:.55rem;padding-bottom:.6rem;row-gap:.45rem}
+  nav .brand{flex:1 1 100%;justify-content:center}
+  nav .links{flex:1 1 100%;justify-content:space-between;gap:.6rem;font-size:.82rem;white-space:nowrap}
+  .facts{flex-direction:column;align-items:center;gap:.7rem}
   .tiles{grid-template-columns:1fr}
   .board{grid-template-columns:1fr}
   .people{grid-template-columns:repeat(2,minmax(0,1fr))}
