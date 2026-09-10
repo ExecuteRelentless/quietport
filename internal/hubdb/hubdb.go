@@ -622,7 +622,7 @@ func (d *DB) Heartbeats(deviceID int64, limit int) ([]model.Heartbeat, error) {
 
 type Release struct {
 	OS, Arch, Version, File, SHA256, Sig string
-	PublishedAt                        time.Time
+	PublishedAt                          time.Time
 }
 
 func (d *DB) ReleasePut(r Release) error {

@@ -28,8 +28,8 @@ type Config struct {
 	SyncInterval   int    `json:"sync_interval_seconds"`
 	S3Endpoint     string `json:"s3_endpoint"`
 
-	DeviceTokenSealed string `json:"device_token"` // sealed
-	DeviceKeysSealed  string `json:"device_keys"`  // sealed JSON cryptobox.DeviceKeys
+	DeviceTokenSealed string `json:"device_token"`          // sealed
+	DeviceKeysSealed  string `json:"device_keys"`           // sealed JSON cryptobox.DeviceKeys
 	PreAuthSealed     string `json:"preauth_key,omitempty"` // sealed, only until first successful login
 
 	Circles []CircleState `json:"circles"`
@@ -37,14 +37,14 @@ type Config struct {
 
 type CircleState struct {
 	model.CircleConfig
-	KeySealed   string `json:"key"`       // sealed JSON model.CircleKey for CircleConfig.Generation
-	KeyGen      int    `json:"key_generation"`
-	NeedsKey    bool   `json:"needs_key"` // no key for the current generation: re-provisioning needed (FR-57)
-	Resync      bool   `json:"resync"`    // next run must be --resync
-	FilterHash  string `json:"filter_hash"`
-	Removed     bool   `json:"removed"`   // no longer a member; folder left in place, sync stopped
-	Excluded    []string `json:"excluded_paths,omitempty"` // FR-40
-	S3Sealed    string `json:"s3"` // sealed "access:secret"
+	KeySealed  string   `json:"key"` // sealed JSON model.CircleKey for CircleConfig.Generation
+	KeyGen     int      `json:"key_generation"`
+	NeedsKey   bool     `json:"needs_key"` // no key for the current generation: re-provisioning needed (FR-57)
+	Resync     bool     `json:"resync"`    // next run must be --resync
+	FilterHash string   `json:"filter_hash"`
+	Removed    bool     `json:"removed"`                  // no longer a member; folder left in place, sync stopped
+	Excluded   []string `json:"excluded_paths,omitempty"` // FR-40
+	S3Sealed   string   `json:"s3"`                       // sealed "access:secret"
 }
 
 type Store struct {
@@ -142,18 +142,18 @@ func (s *Store) CircleS3(cs CircleState) (string, string) {
 
 // State is runtime status persisted for `qp status` and heartbeats.
 type State struct {
-	LastHeartbeat   time.Time               `json:"last_heartbeat"`
-	LastHeartbeatOK bool                    `json:"last_heartbeat_ok"`
-	ConnectionType  string                  `json:"connection_type"`
-	TailnetIP       string                  `json:"tailnet_ip"`
+	LastHeartbeat   time.Time                     `json:"last_heartbeat"`
+	LastHeartbeatOK bool                          `json:"last_heartbeat_ok"`
+	ConnectionType  string                        `json:"connection_type"`
+	TailnetIP       string                        `json:"tailnet_ip"`
 	Circles         map[string]model.CircleHealth `json:"circles"`
-	ErrorCount      int                     `json:"error_count"`
-	Conditions      []string                `json:"conditions"`
-	Paused          string                  `json:"paused,omitempty"`
-	LastSyncOK      time.Time               `json:"last_sync_ok"`
-	Notified        map[string]time.Time    `json:"notified"`
-	StartedAt       time.Time               `json:"started_at"`
-	PendingBytes    int64                   `json:"pending_bytes"`
+	ErrorCount      int                           `json:"error_count"`
+	Conditions      []string                      `json:"conditions"`
+	Paused          string                        `json:"paused,omitempty"`
+	LastSyncOK      time.Time                     `json:"last_sync_ok"`
+	Notified        map[string]time.Time          `json:"notified"`
+	StartedAt       time.Time                     `json:"started_at"`
+	PendingBytes    int64                         `json:"pending_bytes"`
 }
 
 func LoadState() State {

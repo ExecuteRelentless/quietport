@@ -186,7 +186,9 @@ func Uninstall(removeFolder bool) error {
 
 const launchLabel = "app.quietport.agent"
 
-func plistPath() string { return filepath.Join(home(), "Library", "LaunchAgents", launchLabel+".plist") }
+func plistPath() string {
+	return filepath.Join(home(), "Library", "LaunchAgents", launchLabel+".plist")
+}
 
 func registerStartup() error {
 	switch runtime.GOOS {

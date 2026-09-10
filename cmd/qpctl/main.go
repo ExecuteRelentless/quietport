@@ -107,10 +107,10 @@ func confDir() string {
 }
 
 type Conf struct {
-	Hub      string `json:"hub"`
-	Proxy    string `json:"proxy,omitempty"`
-	Operator string `json:"operator"`
-	Host     string `json:"host,omitempty"`
+	Hub         string `json:"hub"`
+	Proxy       string `json:"proxy,omitempty"`
+	Operator    string `json:"operator"`
+	Host        string `json:"host,omitempty"`
 	TokenSealed string `json:"token"`
 }
 

@@ -87,15 +87,15 @@ func (r *Rclone) envMulti(bucket, ak, sk, endpoint string, remotes map[string]mo
 }
 
 type Result struct {
-	OK           bool
-	Err          error
-	Output       string
-	NeedsResync  bool
-	Quota        bool
-	PathTooLong  bool
-	Transferred  int64
-	Errors       int
-	Duration     time.Duration
+	OK          bool
+	Err         error
+	Output      string
+	NeedsResync bool
+	Quota       bool
+	PathTooLong bool
+	Transferred int64
+	Errors      int
+	Duration    time.Duration
 }
 
 var (

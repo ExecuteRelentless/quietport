@@ -13,13 +13,13 @@ import (
 // Windows dialogs through user32 MessageBoxW (no console window: built with -H windowsgui).
 
 const (
-	mbOK          = 0x0
-	mbOKCancel    = 0x1
-	mbYesNo       = 0x4
-	mbIconInfo    = 0x40
-	mbIconError   = 0x10
-	idOK          = 1
-	idYes         = 6
+	mbOK        = 0x0
+	mbOKCancel  = 0x1
+	mbYesNo     = 0x4
+	mbIconInfo  = 0x40
+	mbIconError = 0x10
+	idOK        = 1
+	idYes       = 6
 )
 
 func msgbox(text, caption string, flags uint32) int32 {

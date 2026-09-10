@@ -71,11 +71,11 @@ func (a *API) do(method, path string, in, out any) error {
 	return nil
 }
 
-func (a *API) Get(p string, out any) error         { return a.do("GET", p, nil, out) }
-func (a *API) Post(p string, in, out any) error    { return a.do("POST", p, in, out) }
-func (a *API) Patch(p string, in, out any) error   { return a.do("PATCH", p, in, out) }
-func (a *API) Delete(p string) error               { return a.do("DELETE", p, nil, nil) }
-func (a *API) DeleteOut(p string, out any) error   { return a.do("DELETE", p, nil, out) }
+func (a *API) Get(p string, out any) error       { return a.do("GET", p, nil, out) }
+func (a *API) Post(p string, in, out any) error  { return a.do("POST", p, in, out) }
+func (a *API) Patch(p string, in, out any) error { return a.do("PATCH", p, in, out) }
+func (a *API) Delete(p string) error             { return a.do("DELETE", p, nil, nil) }
+func (a *API) DeleteOut(p string, out any) error { return a.do("DELETE", p, nil, out) }
 func (a *API) Str(p string) (string, error) {
 	var v any
 	if err := a.Get(p, &v); err != nil {

@@ -124,9 +124,9 @@ func (h *Hub) opPersonList(w http.ResponseWriter, r *http.Request) {
 
 type personView struct {
 	model.Person
-	Circles   []model.Membership `json:"circles"`
-	Devices   []deviceView       `json:"devices"`
-	Invites   []model.Invite     `json:"invites"`
+	Circles []model.Membership `json:"circles"`
+	Devices []deviceView       `json:"devices"`
+	Invites []model.Invite     `json:"invites"`
 }
 type deviceView struct {
 	model.Device
@@ -741,7 +741,9 @@ func (h *Hub) backupStatus() map[string]any {
 	return out
 }
 
-func (h *Hub) opBackupStatus(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, h.backupStatus()) }
+func (h *Hub) opBackupStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, h.backupStatus())
+}
 
 // refreshPolicy regenerates the headscale policy from persons/households (FR-81/82/83), commits it and pushes it.
 func (h *Hub) refreshPolicy() error {

@@ -223,6 +223,13 @@ entry, sidebar pin, the Share shortcut; the QPSync folder only if they say so):
 - From the installer: open Quietport.dmg / Quietport.exe / the Linux installer again; it notices the install and offers Remove.
 - From a terminal: the `qp` path above with `uninstall` (`--remove-folder` to delete QPSync too). Linux: `~/.local/share/quietport/qp uninstall`.
 
+## Moving to a real domain
+
+`scripts/wizard-domain-cutover.sh <domain> <ssh host> <version>` does it in 5 gated stages: register, DNS (apex and
+`hub.` both DNS-only, the mesh control traffic cannot pass a proxy), hub env + headscale `server_url` + restart,
+rebuild and publish installers with the new default host, verify. The old hostname stays in `QP_EXTRA_HOSTS` so
+devices already enrolled keep working and pick up the new release on their own.
+
 ## Known limits in this build
 
 - Windows client is built and packaged (tailscaled userspace + DPAPI + Scheduled Task) but has not been run on a

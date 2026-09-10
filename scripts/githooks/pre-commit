@@ -1,0 +1,12 @@
+#!/bin/sh
+# Install once: git config core.hooksPath scripts/githooks
+# Blocks a commit when Go files are unformatted, vet fails, or tests fail.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+files=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+if [ -n "$files" ]; then
+  bad=$(gofmt -l $files)
+  if [ -n "$bad" ]; then echo "gofmt first:"; echo "$bad"; exit 1; fi
+fi
+export GOFLAGS=-mod=mod
+go vet ./... && go test ./... >/dev/null

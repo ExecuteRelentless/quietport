@@ -97,6 +97,20 @@ About 15 minutes on a small VM.
 - Windows binaries are unsigned until the SignPath signing job is configured (`docs/SIGNING.md`); SmartScreen shows
   "More info / Run anyway" once and Defender may need a false-positive report in the meantime.
 
+## Working on the code
+
+- `CONTEXT.md` is the shared language (circle, person, device, owner, operator, invite, grant, bundle). Use its
+  terms in code, docs and commits; add to it when a new concept appears.
+- `docs/adr/` records the decisions that are not obvious from the code, one file each. A decision is superseded by
+  a new record, never edited away.
+- Tests: `go test ./...`. They cover the seams that matter (sealing and signing, invite consume-once, append-only
+  audit, migrations, the folder-creation gates, self-update version logic, the marker). Add a failing test with every
+  bug fix. CI (`.github/workflows/ci.yml`) runs gofmt, vet and the tests on every push and pull request.
+- `git config core.hooksPath scripts/githooks` installs a pre-commit hook that refuses unformatted Go, vet errors and
+  failing tests.
+- `scripts/wizard-domain-cutover.sh` walks the operator through moving the hub to a real domain without breaking
+  enrolled devices.
+
 ## Security model in one paragraph
 
 The hub stores ciphertext with encrypted names, holds no folder key and no member password, and cannot read anything

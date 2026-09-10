@@ -139,7 +139,6 @@ func (a *Agent) rotate(ctx context.Context, circleID int64, people []model.Circl
 	return time.Since(start), nil
 }
 
-
 // createCircle: this computer generates the key for a brand-new folder and registers it with the hub.
 func (a *Agent) createCircle(ctx context.Context, name string) (string, error) {
 	var cc model.CircleConfig
