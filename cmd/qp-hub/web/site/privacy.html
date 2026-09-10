@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quietport Privacy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#ffffff; --bg-alt:#f5f5f7; --card:#ffffff; --tile:#f5f5f7; --ink:#1d1d1f; --ink-2:#6e6e73; --line:#d2d2d7; --link:#0066cc; --btn:#0071e3;
+  --accent:#0071e3; --accent-soft:#e8f0fe; --ok:#1d9f4f; --ok-soft:#e3f5e9; --fa:#0071e3; --fb:#34c759; --fc:#ff9f0a;
+  --shadow:0 2px 12px rgba(0,0,0,.08);
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){ --bg:#000; --bg-alt:#161617; --card:#1d1d1f; --tile:#1d1d1f; --ink:#f5f5f7; --ink-2:#a1a1a6; --line:#424245; --link:#2997ff; --btn:#0071e3; --accent:#2997ff; --accent-soft:#0e2a4a; --ok:#30d158; --ok-soft:#0f3a1f; --shadow:0 2px 12px rgba(0,0,0,.5); color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --bg:#000; --bg-alt:#161617; --card:#1d1d1f; --tile:#1d1d1f; --ink:#f5f5f7; --ink-2:#a1a1a6; --line:#424245; --link:#2997ff; --btn:#0071e3; --accent:#2997ff; --accent-soft:#0e2a4a; --ok:#30d158; --ok-soft:#0f3a1f; --shadow:0 2px 12px rgba(0,0,0,.5); color-scheme:dark; }
+
+*{box-sizing:border-box}
+html{-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:17px;line-height:1.47;letter-spacing:-.022em}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.wrap{max-width:66rem;margin:0 auto;padding:0 1.5rem}
+h1,h2,h3{margin:0;letter-spacing:-.015em;line-height:1.08;text-wrap:balance}
+h1{font-size:clamp(2.8rem,7vw,4.6rem);font-weight:700;letter-spacing:-.032em;line-height:1.04}
+h1 .grad{background:linear-gradient(92deg,#0a84ff,#2fb0a3 60%,#34c759);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:clamp(2.1rem,4.8vw,3.1rem);font-weight:700;letter-spacing:-.028em}
+h3{font-size:1.35rem;font-weight:600}
+p{margin:0}
+.sub{font-size:clamp(1.15rem,2.2vw,1.5rem);line-height:1.32;color:var(--ink-2);font-weight:400;margin:.9rem auto 0;max-width:38rem}
+.muted{color:var(--ink-2)}
+.center{text-align:center}
+.more{font-size:1.05rem}
+.more::after{content:" \203A";}
+.btn{display:inline-block;background:linear-gradient(180deg,#1a8cff,#0071e3);color:#fff;padding:.7rem 1.3rem;border-radius:999px;font-size:1.02rem;font-weight:500;box-shadow:0 6px 18px rgba(0,113,227,.28),inset 0 1px 0 rgba(255,255,255,.25);transition:transform .2s ease,box-shadow .2s ease}
+.btn:hover{text-decoration:none;transform:translateY(-1px);box-shadow:0 10px 26px rgba(0,113,227,.34),inset 0 1px 0 rgba(255,255,255,.25)}
+
+/* nav */
+nav{position:sticky;top:0;z-index:5;background:rgba(0,0,0,.82);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:52px;font-size:.8rem;letter-spacing:-.01em}
+nav .brand{color:#f5f5f7;font-weight:600;font-size:1.22rem;letter-spacing:-.02em;display:flex;align-items:center;gap:.55rem}
+nav .brand:hover{text-decoration:none}
+nav .logo{width:30px;height:30px}
+nav .links{display:flex;gap:1.9rem}
+nav .links a{color:#f5f5f7;opacity:.8;transition:opacity .2s}
+nav .links a:hover{opacity:1;text-decoration:none}
+
+/* hero */
+.hero{padding:4.4rem 0 2.8rem;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;left:50%;top:22rem;width:60rem;height:22rem;transform:translateX(-50%);background:radial-gradient(closest-side,rgba(10,132,255,.16),rgba(47,176,163,.08) 55%,transparent 75%);filter:blur(30px);pointer-events:none}
+.hero .wrap{position:relative}
+.hero .actions{display:flex;justify-content:center;gap:1.6rem;margin-top:1rem;flex-wrap:wrap;align-items:center}
+.stage{max-width:58rem;margin:2.6rem auto 0;background:var(--card);border-radius:22px;padding:0;box-shadow:0 30px 80px rgba(15,22,38,.16),0 0 0 .5px rgba(0,0,0,.08);overflow:hidden}
+.stage .bar{height:44px;display:flex;align-items:center;gap:.5rem;padding:0 1rem;background:linear-gradient(180deg,#f7f7f9,#ededf0);border-bottom:1px solid #dfe0e4}
+.stage .bar i{width:12px;height:12px;border-radius:50%;display:block}
+.stage .bar i:nth-child(1){background:#ff5f57}.stage .bar i:nth-child(2){background:#febc2e}.stage .bar i:nth-child(3){background:#28c840}
+.stage .bar span{margin-left:auto;margin-right:auto;font-size:.82rem;color:#6e6e73;font-weight:500}
+.stage .body{padding:1.6rem 1.8rem 1.1rem;background:linear-gradient(180deg,#fbfbfd,#f2f3f6)}
+.stage svg{width:100%;height:auto;display:block}
+.stage .cap{font-size:.95rem;color:var(--ink-2);text-align:center;margin-top:.6rem}
+
+/* animated folder lock in the header: the shackle lifts and swings open, then snaps shut with a small bounce */
+.folderlock{width:30px;height:30px;overflow:visible}
+.folderlock .shackle{transform-box:view-box;transform-origin:53px 38px;animation:shackle 7s cubic-bezier(.34,1.56,.64,1) infinite}
+.folderlock .lbody,.folderlock .keyhole{transform-box:view-box;transform-origin:46px 45px;animation:lockbody 7s ease-in-out infinite}
+.folderlock .keyhole{animation:keyhole 7s ease-in-out infinite}
+@keyframes shackle{0%,58%{transform:translateY(0) rotate(0)}64%{transform:translateY(-4px) rotate(0)}70%,80%{transform:translateY(-4px) rotate(-32deg)}86%{transform:translateY(-4px) rotate(0)}91%{transform:translateY(0) rotate(0)}100%{transform:translateY(0) rotate(0)}}
+@keyframes lockbody{0%,90%{transform:scale(1)}93%{transform:scale(1.12)}97%,100%{transform:scale(1)}}
+@keyframes keyhole{0%,90%{fill:#f5f5f7}93%,97%{fill:#34c759}100%{fill:#f5f5f7}}
+
+/* three crisp facts under the hero */
+.facts{list-style:none;padding:0;margin:1.7rem auto 0;display:flex;justify-content:center;gap:2.4rem;flex-wrap:wrap;font-size:.95rem;color:var(--ink-2)}
+.facts li{display:flex;align-items:center;gap:.5rem}
+.facts svg{width:20px;height:20px;fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+/* sections */
+section{padding:4.2rem 0}
+section.alt{background:var(--bg-alt)}
+section.dark{background:radial-gradient(120% 90% at 50% 0%,#17171a,#000 70%);color:#f5f5f7;--card:#1d1d1f;--tile:#1d1d1f;--ink:#f5f5f7;--ink-2:#a1a1a6;--line:#3a3a3d;--accent:#2997ff;--accent-soft:#0e2a4a;--ok:#30d158;--ok-soft:#0f3a1f}
+.lede{max-width:38rem;margin:.8rem auto 0;font-size:1.2rem;line-height:1.45;color:var(--ink-2)}
+
+/* step tiles */
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1.8rem}
+.tile{background:linear-gradient(180deg,#fafafc,#f0f1f4);border-radius:30px;padding:1.3rem;display:flex;flex-direction:column;gap:1rem;min-width:0;box-shadow:inset 0 1px 0 #fff,0 0 0 .5px rgba(0,0,0,.05)}
+.tile .vis{border-radius:20px;overflow:hidden;min-height:13rem;display:flex;flex-direction:column;justify-content:center}
+.tile h3{margin-top:.2rem;font-size:1.5rem;letter-spacing:-.022em}
+.tile p{color:var(--ink-2);font-size:1rem;line-height:1.45}
+.tile .n{font-size:.74rem;font-weight:600;color:var(--accent);letter-spacing:.08em;text-transform:uppercase}
+.shot{background:var(--card);box-shadow:0 10px 30px rgba(0,0,0,.09),0 0 0 .5px rgba(0,0,0,.06);border-radius:18px;overflow:hidden}
+.shot img{display:block;width:100%;height:auto}
+.chip{display:block;background:#1d1d1f;color:#f5f5f7;font-family:var(--mono);font-size:.72rem;padding:.55rem .8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;animation:pulse 4s ease-in-out infinite}
+.chip b{color:#2997ff;font-weight:500}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.72}}
+
+/* installer dialog animation: ask (0-35%) -> progress (35-60%) -> connected (60-100%) on a 9s loop */
+.dlg-stage{position:relative;background:linear-gradient(160deg,#dfe6f3,#eef1f7);border-radius:16px;min-height:11rem;display:flex;align-items:center;justify-content:center;padding:1.5rem;overflow:hidden}
+.dlg{position:absolute;width:min(22rem,86%);background:#fff;color:#1d1d1f;border-radius:14px;padding:1.2rem 1.2rem 1rem;box-shadow:0 20px 50px rgba(15,22,38,.22);font-size:.92rem;line-height:1.4}
+.dlg b{display:block;font-weight:600;margin-bottom:.3rem}
+.dlg p{margin:0 0 .9rem;color:#5b6478;font-size:.86rem}
+.dlg-icon{width:2.2rem;height:2.2rem;border-radius:9px;background:var(--accent);margin-bottom:.7rem;position:relative}
+.dlg-icon::after{content:"";position:absolute;inset:.55rem;border:2px solid #fff;border-radius:3px}
+.dlg-icon.ok{background:var(--ok)}
+.dlg-icon.ok::after{inset:auto;left:.7rem;top:.45rem;width:.45rem;height:.9rem;border:0;border-right:2.5px solid #fff;border-bottom:2.5px solid #fff;border-radius:0;transform:rotate(45deg)}
+.dlg-btns{display:flex;justify-content:flex-end;gap:.5rem}
+.dlg-btns span{padding:.35rem .9rem;border-radius:7px;background:#eef0f5;font-size:.85rem}
+.dlg-btns .primary{background:var(--accent);color:#fff}
+.dlg.d1{animation:d1 9s ease-in-out infinite}
+.dlg.d2{animation:d2 9s ease-in-out infinite}
+.dlg-prog{position:absolute;bottom:2rem;width:min(16rem,70%);height:6px;border-radius:3px;background:rgba(15,22,38,.12);overflow:hidden;opacity:0;animation:progShow 9s linear infinite}
+.dlg-prog i{display:block;height:100%;width:0;background:var(--accent);animation:progFill 9s linear infinite}
+@keyframes d1{0%,4%{opacity:0;transform:translateY(8px) scale(.98)}9%,32%{opacity:1;transform:none}37%,100%{opacity:0;transform:translateY(-6px) scale(.98)}}
+@keyframes d2{0%,62%{opacity:0;transform:translateY(8px) scale(.98)}67%,92%{opacity:1;transform:none}96%,100%{opacity:0;transform:translateY(-6px) scale(.98)}}
+@keyframes progShow{0%,38%{opacity:0}41%,58%{opacity:1}61%,100%{opacity:0}}
+@keyframes progFill{0%,40%{width:0}58%{width:100%}100%{width:100%}}
+
+/* finder */
+.finder{background:#fff;border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.finder img{display:block;width:100%;height:auto}
+.finder .pane{position:relative;height:10.5rem;background:#fff;padding:1.4rem 1.6rem 3.6rem;display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap}
+.folder{width:5.4rem;text-align:center;font-size:.85rem;color:#1d1d1f;opacity:0;transform:translateY(10px) scale(.9);animation:pop .6s cubic-bezier(.2,.8,.2,1) forwards}
+.folder svg{width:4.2rem;height:auto;display:block;margin:0 auto .35rem}
+.folder:nth-child(1){animation-delay:.6s}.folder:nth-child(2){animation-delay:1.5s}
+.finder .pin{position:absolute;left:1.6rem;bottom:1.2rem;background:var(--ok-soft);color:var(--ok);font-size:.8rem;font-weight:600;padding:.45rem .7rem;border-radius:999px;opacity:0;animation:appear .5s ease 2.4s forwards}
+@keyframes pop{to{opacity:1;transform:none}}
+
+
+/* share page: form, then the link (10s loop) */
+.share{position:relative;background:var(--card);box-shadow:var(--shadow);border-radius:16px;overflow:hidden;aspect-ratio:1440/1100}
+.share img{position:absolute;inset:0;width:100%;height:auto;display:block}
+.share .sb{opacity:0;animation:shareB 10s ease-in-out infinite}
+.share .sa{animation:shareA 10s ease-in-out infinite}
+@keyframes shareA{0%,44%{opacity:1}50%,94%{opacity:0}100%{opacity:1}}
+@keyframes shareB{0%,46%{opacity:0}52%,94%{opacity:1}100%{opacity:0}}
+
+/* faq */
+.faq{max-width:44rem;margin:1.6rem auto 0;border-top:1px solid var(--line)}
+.faq details{border-bottom:1px solid var(--line);padding:.2rem 0}
+.faq summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:1rem 0;font-weight:600;font-size:1.1rem}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-weight:400;font-size:1.4rem;color:var(--ink-2);transition:transform .25s ease}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq p{color:var(--ink-2);padding:0 0 1.1rem;max-width:40rem}
+
+section.dark .tile,section.dark .dl .card{background:linear-gradient(180deg,#232326,#1a1a1d);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tile{background:linear-gradient(180deg,#1f1f22,#161618);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)} :root:not([data-theme="light"]) .stage .bar{background:linear-gradient(180deg,#2a2a2e,#202024);border-color:#333} :root:not([data-theme="light"]) .stage .body{background:linear-gradient(180deg,#1d1d20,#151517)} :root:not([data-theme="light"]) .dl .card{background:linear-gradient(180deg,#222226,#1a1a1d)}}
+/* circles board */
+/* circles explainer */
+.circles .intro{max-width:34rem;color:var(--ink-2)}
+.board{background:var(--card);border-radius:24px;padding:1.25rem;margin:1.8rem auto 0;max-width:56rem;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:2rem;align-items:start}
+.legend{display:grid;gap:.75rem}
+.legend div{display:flex;align-items:center;gap:.75rem;padding:.75rem .9rem;border-radius:14px;border:1px solid var(--line);transition:background .4s,border-color .4s}
+.legend i{width:14px;height:14px;border-radius:50%;display:block;flex:none}
+.legend span{font-weight:600}
+.legend small{display:block;color:var(--ink-2);font-weight:400;font-size:.85rem}
+.people{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}
+.person{border:1px solid var(--line);border-radius:18px;padding:1rem .8rem;text-align:center}
+.avatar{width:2.6rem;height:2.6rem;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto .6rem;font-family:var(--display)}
+.person b{display:block;font-size:.95rem;margin-bottom:.7rem}
+.fold{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--ink-2);padding:.35rem .45rem;border-radius:9px;margin-bottom:.3rem;transition:background .4s,color .4s,transform .4s}
+.fold i{width:14px;height:11px;border-radius:3px;display:block;flex:none}
+.fold.none{border:1px dashed var(--line);justify-content:center;color:var(--ink-2)}
+.ca i{background:var(--fa)}.cb i{background:var(--fb)}.cc i{background:var(--fc)}
+/* 12s loop: A lit 0-33%, B 33-66%, C 66-100% */
+.legend .ca{animation:litA 12s infinite}.legend .cb{animation:litB 12s infinite}.legend .cc{animation:litC 12s infinite}
+.fold.ca{animation:foldA 12s infinite}.fold.cb{animation:foldB 12s infinite}.fold.cc{animation:foldC 12s infinite}
+@keyframes litA{0%,30%{background:color-mix(in srgb,var(--fa) 14%,transparent);border-color:var(--fa)}33%,100%{background:transparent;border-color:var(--line)}}
+@keyframes litB{0%,30%{background:transparent;border-color:var(--line)}33%,63%{background:color-mix(in srgb,var(--fb) 14%,transparent);border-color:var(--fb)}66%,100%{background:transparent;border-color:var(--line)}}
+@keyframes litC{0%,63%{background:transparent;border-color:var(--line)}66%,97%{background:color-mix(in srgb,var(--fc) 16%,transparent);border-color:var(--fc)}100%{background:transparent;border-color:var(--line)}}
+@keyframes foldA{0%,30%{background:color-mix(in srgb,var(--fa) 14%,transparent);color:var(--ink);transform:translateX(3px)}33%,100%{background:transparent;color:var(--ink-2);transform:none}}
+@keyframes foldB{0%,30%{background:transparent;color:var(--ink-2);transform:none}33%,63%{background:color-mix(in srgb,var(--fb) 14%,transparent);color:var(--ink);transform:translateX(3px)}66%,100%{background:transparent;color:var(--ink-2);transform:none}}
+@keyframes foldC{0%,63%{background:transparent;color:var(--ink-2);transform:none}66%,97%{background:color-mix(in srgb,var(--fc) 16%,transparent);color:var(--ink);transform:translateX(3px)}100%{background:transparent;color:var(--ink-2);transform:none}}
+.board-cap{grid-column:1/-1;font-size:.9rem;color:var(--ink-2);margin:0;padding-top:.5rem;border-top:1px solid var(--line)}
+
+
+/* download */
+.dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;max-width:44rem;margin:1.8rem auto 0}
+.dl .card{background:linear-gradient(180deg,#fff,#f7f7fa);border-radius:30px;padding:2rem 1.6rem;text-align:center;box-shadow:0 12px 32px rgba(0,0,0,.07),0 0 0 .5px rgba(0,0,0,.05)}
+.dl .card h3{font-size:1.5rem}
+.dl .card .file{font-family:var(--mono);font-size:.9rem;color:var(--ink-2);margin:.4rem 0 .9rem}
+.ops{text-align:center;margin-top:1.4rem;font-size:.92rem;color:var(--ink-2)}
+.ops a{margin:0 .5rem}
+footer{border-top:1px solid var(--line);padding:1.5rem 0 2.4rem;font-size:.75rem;color:#86868b;letter-spacing:-.01em}
+footer .wrap{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+
+/* hero animation, 16s loop, both directions. Leg 1: your folder (96,90) -> server; leg 2: server -> their folder (504,90).
+   Leg 3: their folder -> server; leg 4: server -> your folder. Packets stop short of the server box on every leg. */
+.p1,.p2,.p3,.p4{animation-duration:16s;animation-iteration-count:infinite;animation-timing-function:ease-in-out}
+.p1{animation-name:p1}.p2{animation-name:p2}.p3{animation-name:p3}.p4{animation-name:p4}
+.p1 .file{animation:p1file 16s linear infinite}.p1 .lock{animation:p1lock 16s linear infinite}
+.p2 .lock{animation:p2lock 16s linear infinite}.p2 .file{animation:p2file 16s linear infinite}
+.p3 .file{animation:p3file 16s linear infinite}.p3 .lock{animation:p3lock 16s linear infinite}
+.p4 .lock{animation:p4lock 16s linear infinite}.p4 .file{animation:p4file 16s linear infinite}
+.led{animation:led 16s linear infinite}
+@keyframes p1{0%,2%{transform:translate(96px,90px);opacity:0}4%{opacity:1}17%{transform:translate(238px,100px);opacity:1}19%,100%{transform:translate(238px,100px);opacity:0}}
+@keyframes p1file{0%,9%{opacity:1}12%,100%{opacity:0}}
+@keyframes p1lock{0%,9%{opacity:0}12%,100%{opacity:1}}
+@keyframes p2{0%,22%{transform:translate(362px,100px);opacity:0}24%{opacity:1}37%{transform:translate(504px,90px);opacity:1}46%{transform:translate(504px,90px);opacity:1}48%,100%{transform:translate(504px,90px);opacity:0}}
+@keyframes p2lock{0%,31%{opacity:1}34%,100%{opacity:0}}
+@keyframes p2file{0%,31%{opacity:0}34%,100%{opacity:1}}
+@keyframes p3{0%,52%{transform:translate(504px,90px);opacity:0}54%{opacity:1}67%{transform:translate(362px,100px);opacity:1}69%,100%{transform:translate(362px,100px);opacity:0}}
+@keyframes p3file{0%,59%{opacity:1}62%,100%{opacity:0}}
+@keyframes p3lock{0%,59%{opacity:0}62%,100%{opacity:1}}
+@keyframes p4{0%,72%{transform:translate(238px,100px);opacity:0}74%{opacity:1}87%{transform:translate(96px,90px);opacity:1}96%{transform:translate(96px,90px);opacity:1}98%,100%{transform:translate(96px,90px);opacity:0}}
+@keyframes p4lock{0%,81%{opacity:1}84%,100%{opacity:0}}
+@keyframes p4file{0%,81%{opacity:0}84%,100%{opacity:1}}
+@keyframes led{0%,17%{opacity:.25}19%,23%{opacity:1}25%,67%{opacity:.25}69%,73%{opacity:1}75%,100%{opacity:.25}}
+
+/* scroll motion (adopted from the FoundMargin site): everything is gated behind body.anim, which JS adds only
+   when the visitor has not asked for reduced motion, so the static page is the fallback */
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body.anim .rv{opacity:0;transform:translateY(16px);transition:opacity .55s ease,transform .55s ease}
+body.anim .rv.in{opacity:1;transform:none}
+body.anim .hero > *{animation:rise .6s ease both}
+body.anim .hero > *:nth-child(2){animation-delay:.08s}
+body.anim .hero > *:nth-child(3){animation-delay:.16s}
+body.anim .hero > *:nth-child(4){animation-delay:.28s}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+body.anim .tile,body.anim .dl .card,body.anim .person{transition:transform .35s ease,box-shadow .35s ease}
+body.anim .tile:hover,body.anim .dl .card:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(0,0,0,.10)}
+body.anim [data-plx]{will-change:transform}
+/* the Finder folders pop in when their tile scrolls into view, not on page load */
+body.anim .folder{animation:none;opacity:0;transform:translateY(10px) scale(.9)}
+body.anim .rv.in .folder{animation:pop .6s cubic-bezier(.2,.8,.2,1) forwards}
+body.anim .finder .pin{animation:none;opacity:0}
+body.anim .rv.in .finder .pin{animation:appear .5s ease 2.4s forwards}
+body:not(.anim) .folder,body:not(.anim) .finder .pin{opacity:1;transform:none;animation:none}
+body.anim .board .person{opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease}
+body.anim .board.in .person{opacity:1;transform:none}
+body.anim .board.in .person:nth-child(2){transition-delay:.08s}
+body.anim .board.in .person:nth-child(3){transition-delay:.16s}
+body.anim .board.in .person:nth-child(4){transition-delay:.24s}
+
+@media (max-width:52rem){
+  .tiles{grid-template-columns:1fr}
+  .board{grid-template-columns:1fr}
+  .people{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dl{grid-template-columns:1fr}
+  .hero{padding:2.4rem 0 1.6rem}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .folder,.finder .pin{opacity:1;transform:none}
+  .dlg.d1{opacity:0}.dlg.d2{opacity:1;transform:none}.dlg-prog{opacity:0}
+  .share .sa{opacity:0}.share .sb{opacity:1}
+  .folderlock .shackle,.folderlock .lbody,.folderlock .keyhole{animation:none}
+  .p1,.p3{opacity:0}
+  .p2{opacity:1;transform:translate(504px,90px)}.p2 .lock{opacity:0}.p2 .file{opacity:1}
+  .p4{opacity:1;transform:translate(96px,90px)}.p4 .lock{opacity:0}.p4 .file{opacity:1}
+}
+</style>
+<style>.doc{max-width:44rem;margin:0 auto;padding:3rem 1.5rem 4rem}.doc h1{font-size:2.4rem;margin-bottom:.4rem}.doc h2{font-size:1.35rem;margin:2rem 0 .5rem}.doc p,.doc li{color:var(--ink-2);line-height:1.55}.doc ul{padding-left:1.2rem}</style>
+</head><body>
+<nav><div class="wrap"><a class="brand" href="/">Quietport</a><div class="links"><a href="/#how">How it works</a><a href="/#download">Download</a><a href="/#faq">Questions</a></div></div></nav>
+<main class="doc">
+<h1>Privacy</h1>
+<p class="muted">Last updated 9 September 2026.</p>
+<h2>What Quietport is</h2>
+<p>Quietport is free, open-source software (MIT licence) that keeps a shared folder in sync between the computers of people who were invited to it. The source is at <a href="https://github.com/ExecuteRelentless/quietport">github.com/ExecuteRelentless/quietport</a>. Anyone can run their own hub; this page describes the hub run by the project at this address.</p>
+<h2>What the hub can and cannot see</h2>
+<ul>
+<li>Files and file names are encrypted on your computer before they are uploaded. The hub stores ciphertext only and never holds the key that would open it. Nobody operating the hub can read your files or their names.</li>
+<li>The hub knows how much encrypted data each folder holds, so it can enforce the folder's size limit.</li>
+</ul>
+<h2>What the hub stores about you</h2>
+<ul>
+<li>The name typed when you were invited or when you started a folder. No email address is required or collected by the software.</li>
+<li>For each computer: its name as reported by the operating system, operating system and version, the version of Quietport it runs, its private-network address, and a public key used to deliver folder keys to it.</li>
+<li>A check-in every 5 minutes with: last successful sync time per folder, amount of data waiting to sync, free disk space, connection type (direct or relayed), and error counts. Check-ins are kept for 7 days.</li>
+<li>An audit log of administrative actions (invites created, people added or removed, keys rotated), kept indefinitely.</li>
+<li>The network address that retrieved an invite or started a folder, used only for rate limiting and abuse prevention.</li>
+</ul>
+<h2>What it does not do</h2>
+<ul>
+<li>No analytics, no advertising, no tracking pixels, no third-party scripts on this website other than fonts loaded from Google Fonts.</li>
+<li>No cookies are set by this website or by the software.</li>
+<li>Nothing is sold or shared with anyone.</li>
+</ul>
+<h2>Where data lives</h2>
+<p>The hub runs on a server in the United States. Encrypted backups of the hub's own database and of the encrypted folder contents are kept at a second location in the United States. Removing Quietport from a computer (Share a folder, then "Remove Quietport from this computer") deletes everything the software stored on that computer; the hub-side records for that computer are removed when its person is removed from their last folder.</p>
+<h2>Contact</h2>
+<p>Questions about this policy: open an issue at the repository above.</p>
+</main>
+<footer><div class="wrap"><span>Built with ❤️ in San Francisco</span><span><a href="/">quietport</a></span></div></footer>
+</body></html>

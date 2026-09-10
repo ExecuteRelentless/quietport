@@ -3,8 +3,9 @@ dist/
 cmd/qp-installer/bundle/*
 !cmd/qp-installer/bundle/.keep
 *.syso
+# built binaries at the repo root only; the bare names used to shadow cmd/<name>/ and hid new files there
 winres/.gen.json
-qp-hub
-qpctl
-qpsync-agent
-qp-installer
+/qp-hub
+/qpctl
+/qpsync-agent
+/qp-installer
