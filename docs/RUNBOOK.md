@@ -1,28 +1,30 @@
 # Quietport operator runbook
 
-This is the operator's reference for the running system. The specification is `../quietport-srd.pdf`; the build order
-and acceptance list in it (sections 10 and 11) are what this runbook is checked against.
+This is the operator's reference for the running system as shipped (0.1.14). FR numbers refer to the product
+specification, which is not published.
 
 ## The parts
 
 | Where | What | How it runs |
 |---|---|---|
-| Hub VM (`ssh quietport-hub`) | `qp-hub` on :443 (site, invites, downloads, TLS front for Headscale) and on `<tailnet ip>:8443` (agent + operator API) | systemd `qp-hub`, env in `/etc/quietport/hub.env` |
+| Hub VM | `qp-hub` on :443 (site, invites, downloads, TLS front for Headscale) and on `<tailnet ip>:8443` (agent + operator API) | systemd `qp-hub`, env in `/etc/quietport/hub.env` |
 | Hub VM | Headscale 0.29 on 127.0.0.1:8080, policy pushed from `/var/lib/quietport/policy` (a git repo) | systemd `headscale` |
 | Hub VM | Garage 2.2 object store, S3 API bound to the tailnet address only, one bucket per circle with a size quota | systemd `garage`, config `/etc/garage/garage.toml` |
-| Hub VM | nightly encrypted backup to OCI Object Storage bucket `quietport-backup`, weekly canary restore | `/etc/cron.d/quietport`, state in `/var/lib/quietport/backup/*.json` |
-| Operator machine | `qpctl` + the keystore (`~/.config/quietport/`, sealed with the login Keychain) | run by hand |
-| Each member | `qpsync-agent` + bundled `rclone` and userspace `tailscaled`, all under the user profile | LaunchAgent `app.quietport.agent` (macOS), Scheduled Task `Quietport` (Windows) |
+| Hub VM | nightly encrypted backup (rclone crypt) to any S3-compatible bucket named in `/etc/quietport/backup.env`, weekly canary restore | `/etc/cron.d/quietport`, state in `/var/lib/quietport/backup/*.json` |
+| Operator machine | `qpctl` + the keystore (`$QPCTL_HOME`, default `~/.config/quietport/`, sealed with the login Keychain on macOS) | run by hand |
+| Each member | `qpsync-agent` + bundled `rclone` and userspace `tailscaled`, all under the user profile | LaunchAgent `app.quietport.agent` (macOS), Scheduled Task `Quietport` (Windows), systemd user unit (Linux) |
 
-Circle keys exist in exactly 2 places: the operator's keystore and member devices. The hub never has one. Loss of every
+Circle keys exist only on member devices, plus the operator's keystore for circles the operator created with
+`qpctl circle create`. Circles started by members (installer "Start a new folder", Share page "Start a new folder")
+have their key on the founder's device and the devices it invited, nowhere else. The hub never has one. Loss of every
 copy of a circle's keys makes that circle's files on the hub unrecoverable. There is no escrow, by design (FR-124).
 
 ## Day to day
 
 ```
 qpctl status                      fleet: circles, people, devices, last heartbeats, backup state
-qpctl status sarah                one person, with per-circle sync times and conditions
-qpctl logs sarah --tail 50        heartbeat history + events for that person's devices
+qpctl status sam                one person, with per-circle sync times and conditions
+qpctl logs sam --tail 50        heartbeat history + events for that person's devices
 qpctl audit                       append-only audit log of every operator action
 ```
 
@@ -33,11 +35,11 @@ going through a DERP relay instead of a direct path (slower; usually a NAT or VP
 ## Onboarding
 
 ```
-qpctl person add sarah --email sarah@example.com --household home
-qpctl invite create sarah --circles family,photos          # prints the link; works once; 24 h
+qpctl person add sam --email sam@example.com --household home
+qpctl invite create sam --circles circle-1,circle-2          # prints the link; works once; 24 h
 ```
 Send the link however you normally talk to them. They paste one line, see `Quietport is connected.`, and the folders
-appear. You see `invite.retrieved` then `device.enrolled` in `qpctl logs sarah`. If the link expires or gets used
+appear. You see `invite.retrieved` then `device.enrolled` in `qpctl logs sam`. If the link expires or gets used
 before they run it, `qpctl invite revoke <prefix>` and make a new one.
 
 
@@ -84,7 +86,7 @@ Caveat: the operator's keystore never holds the key of a self-started circle, so
 ## Adding someone to another circle
 
 ```
-qpctl circle add-member family ben          # key reaches Ben's devices on their next heartbeat (5 min)
+qpctl circle add-member circle-1 alex          # key reaches Ben's devices on their next heartbeat (5 min)
 qpctl circle add-member newsletter ben --readonly
 ```
 
@@ -166,21 +168,24 @@ operator's Mac. Without it the backup is ciphertext.
   and gives up only after 3 minutes without a byte, so a slow or relayed link finishes over a few cycles. Agents on
   0.1.12 or older had a 90 s cap and cannot fetch a 50 MB bundle over a slow link: place the bundle by hand (copy
   `dist/<v>/client-<os>-<arch>/*` over the app dir, restart the agent) or re-run the installer.
-- Build: `scripts/build.sh <v>` then `NOTARY_PROFILE=ari-notary scripts/build-installer.sh <v> <hub host>`;
-  publish with `deploy/publish-release.sh <v>` on the hub after copying `quietport-installer-darwin.dmg`,
-  `quietport-installer-darwin.tar.gz` and `quietport-installer-windows-amd64.exe` to `/tmp` there.
+- Build: `scripts/build.sh <v>` then `NOTARY_KEY=<AuthKey.p8> NOTARY_KEY_ID=<id> NOTARY_ISSUER=<issuer>
+  scripts/build-installer.sh <v> <hub host>` (or `NOTARY_PROFILE=<notarytool keychain profile>`); check the DMG with
+  `spctl -a -t open --context context:primary-signature -v <dmg>`, it must say "Notarized Developer ID". Publish with
+  `deploy/publish-release.sh <v>` on the hub after copying everything in `dist/<v>/` to `/tmp` there.
 
 ## Releases and self-update
 
 ```
-scripts/build.sh 0.1.2            # builds hub + client bundles, signs with ../release-keys/release.key
-scp dist/0.1.2/quietport-*-0.1.2.* dist/0.1.2/SHA256SUMS.signed quietport-hub:/tmp/
-# on the hub, as in deploy/publish-release.sh
+scripts/build.sh 0.1.14           # hub, client bundles, operator kit; signs SHA256SUMS with ../release-keys/release.key
+scripts/build-installer.sh 0.1.14 <hub host>   # Mac app + DMG (signed, notarized), Windows exe, Linux installers
+scp dist/0.1.14/* <hub>:/tmp/
+ssh <hub> sudo bash deploy/publish-release.sh 0.1.14   # installs nothing itself; registers the release for self-update
+# a new hub binary: unpack quietport-hub-linux-<arch>.tar.gz and run deploy/hub-install.sh
 ```
 Agents check for a newer version on every heartbeat, download it over the mesh, verify the sha256 and the ed25519
 signature against the key compiled into them, swap binaries, restart, and roll back to the previous version if the
 new one fails to start twice (`update.json` in the app dir records attempts). The release private key is
-`~/Documents/Quietport/release-keys/release.key` on the operator's Mac. Losing it means agents can never update
+`../release-keys/release.key` on the operator's machine, outside the repository. Losing it means agents can never update
 again without a reinstall; back it up with the circle keys.
 
 
@@ -192,8 +197,9 @@ file has reputation. Since 0.1.11 the Windows binaries carry an icon, version in
 description) and an application manifest, and are not symbol-stripped, which removes the cheapest heuristic signals.
 Two things finish the job, both outside this repo:
 
-1. **Code signing.** Cheapest routes in 2026: Azure Trusted Signing (about $10/month, identity validation once), or
-   SignPath's free tier for open source projects; a classic OV certificate from Certum or SSL.com also works.
+1. **Code signing.** Free for this project: SignPath Foundation signs open-source builds made by the public GitHub
+   workflow (`docs/SIGNING.md`, `.github/workflows/windows.yml`). Paid routes if speed matters: Azure Trusted Signing
+   (about $10/month, identity validation once) or a classic OV certificate from Certum or SSL.com.
    Sign `quietport-installer-windows-amd64.exe`, `qpsync-agent.exe`, `tailscaled.exe` and `rclone.exe` in the bundle
    with `signtool` (or the vendor's CLI) before publishing, and the SmartScreen prompt disappears once reputation builds.
 2. **False-positive report to Microsoft.** https://www.microsoft.com/en-us/wdsi/filesubmission (sign in with a
@@ -223,7 +229,11 @@ entry, sidebar pin, the Share shortcut; the QPSync folder only if they say so):
   Windows machine yet. Test on one before inviting Windows members.
 - Resume of a single interrupted multipart upload across an agent restart depends on rclone; an upload interrupted
   mid-file restarts that file on the next cycle, other files are unaffected. (FR-37 partially met.)
-- The macOS installer one-liner is the reliable path. The downloadable `.command` fallback is unsigned, so Gatekeeper
-  asks the user to right-click and Open. Apple Developer ID signing would remove that step.
+- Phones and Chromebooks are not supported: there is no app for them and no web viewer (a web viewer would mean the
+  hub serves code that touches keys, which is a different security model; see the README).
+- The operator keystore has no key for circles members started themselves, so `qpctl circle rotate-key` and
+  `qpctl keys verify` do not apply to those; the owner rotates from their own device.
+- Updates and sync go through the mesh; a device shown as `relayed` (DERP) is slow, sometimes 100 KB/s. Direct paths
+  need UDP 41641 open to the hub.
 - Finder sidebar pinning uses a deprecated Apple API (`LSSharedFileList`) that still works on macOS 26; if Apple
   removes it, the folder still exists at `~/QPSync`, only the sidebar shortcut is lost.

@@ -1,7 +1,7 @@
 name: windows
 # Builds the Windows binaries from source on every tag and, when SignPath is configured, has them signed.
 # SignPath Foundation signs open-source projects for free (https://signpath.org/apply). The signing step is skipped
-# until the three SIGNPATH_* secrets exist, so the workflow is useful before approval too.
+# until the two SIGNPATH_* secrets exist, so the workflow is useful before approval too.
 on:
   push:
     tags: ["v*"]

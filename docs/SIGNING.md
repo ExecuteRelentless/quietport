@@ -19,7 +19,7 @@ Actions (`.github/workflows/windows.yml`), which is what they require.
 3. In the GitHub repository settings add secrets `SIGNPATH_API_TOKEN`, `SIGNPATH_ORGANIZATION_ID`, and variables
    `HUB_HOST` (`quietport.app` or the current hub name) and `RELEASE_PUBKEY` (the base64 line in
    `release-keys/release.pub`).
-4. Push a tag (`git tag v0.1.12 && git push --tags`). The workflow builds, SignPath signs, and the signed files land in
+4. Push a tag (`git tag v0.1.14 && git push --tags`). The workflow builds, SignPath signs, and the signed files land in
    the `windows-signed` artifact. Publish them to the hub with `deploy/publish-release.sh` as usual.
 
 Turnaround for approval is typically days, not hours; the Foundation reviews each project by hand.
