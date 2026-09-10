@@ -74,7 +74,7 @@ func loadConfig() Config {
 		GarageConfig:   env("QP_GARAGE_CONFIG", "/etc/garage/garage.toml"),
 		ACMEDir:        env("QP_ACME_DIR", "/var/lib/quietport/acme"),
 		HeadscaleURL:   env("QP_HEADSCALE_URL", "http://127.0.0.1:8080"),
-		OperatorName:   env("QP_OPERATOR_NAME", "your operator"),
+		OperatorName:   env("QP_OPERATOR_NAME", "Quietport"), // members only ever see the service's name
 		SupportContact: env("QP_SUPPORT_CONTACT", ""),
 		AgentAPIPort:   env("QP_AGENT_API_PORT", "8443"),
 		S3Port:         env("QP_S3_PORT", "3900"),

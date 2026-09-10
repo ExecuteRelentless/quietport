@@ -250,7 +250,7 @@ func (h *Hub) invitePayload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := model.InvitePayload{LoginServer: "https://" + h.cfg.Host, PreAuthKey: inv.PreAuthKey, HubAPI: "http://" + h.cfg.TailnetIP + ":" + h.cfg.AgentAPIPort,
-		SupportContact: h.cfg.SupportContact, OperatorName: h.cfg.OperatorName, InviterName: inv.InviterName, Circles: names, SealedKeys: sealed, AgentVersion: Version}
+		SupportContact: "" /* the operator's contact is for the cert account and their own notices, never for members */, OperatorName: h.cfg.OperatorName, InviterName: inv.InviterName, Circles: names, SealedKeys: sealed, AgentVersion: Version}
 	h.db.Event("invite.retrieved", inv.PersonID, 0, fmt.Sprintf("%s from %s", inv.Prefix, clientIP(r)))
 	h.db.Audit("system", "invite.retrieved", inv.PersonName, inv.Prefix)
 	go h.notifyOperator(fmt.Sprintf("Quietport: %s opened their invitation", inv.PersonName), fmt.Sprintf("%s retrieved the installer for invite %s at %s.", inv.PersonName, inv.Prefix, time.Now().Format(time.RFC1123)))
@@ -407,7 +407,7 @@ func (h *Hub) selfStart(w http.ResponseWriter, r *http.Request) {
 	_ = h.refreshPolicy()
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 201, model.InvitePayload{LoginServer: "https://" + h.cfg.Host, PreAuthKey: pak.Key, HubAPI: "http://" + h.cfg.TailnetIP + ":" + h.cfg.AgentAPIPort,
-		SupportContact: h.cfg.SupportContact, OperatorName: h.cfg.OperatorName, Circles: []string{folder}, SealedKeys: "", AgentVersion: Version,
+		SupportContact: "" /* the operator's contact is for the cert account and their own notices, never for members */, OperatorName: h.cfg.OperatorName, Circles: []string{folder}, SealedKeys: "", AgentVersion: Version,
 		NewCircleID: c.ID, NewCircleSlug: c.Slug, Code: code})
 }
 

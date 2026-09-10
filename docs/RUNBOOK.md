@@ -54,6 +54,9 @@ person record from the typed name (no email), a mesh user and a pre-auth key. Wo
   as `<name>-xxxx` with no email, `qpctl logs <inviter>` shows `invite.created`.
 - Undo: `qpctl invite revoke <prefix>` before it is used; `qpctl offboard <person> --confirm <person>` after.
 
+`QP_OPERATOR_NAME` is what members see for operator-made invites; keep it `Quietport` (the service), not a person.
+`QP_SUPPORT_CONTACT` is only the Let's Encrypt account email; since 0.1.14 it is not sent to members or installers.
+
 The invite page and the installer name the person who made the link ("Austin has shared the folder X with you";
 0.1.14+, column `invite.inviter_name`), never the operator, unless the operator made the invite. People carry the
 name they typed (`person.display_name`) next to the slug, and the Share page's people list shows that name.
