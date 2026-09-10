@@ -455,7 +455,7 @@ func (a *Agent) checkSilentFailure() {
 	}
 	if time.Since(last) > 7*24*time.Hour && time.Since(a.st.Notified["stale"]) > 24*time.Hour {
 		a.st.Notified["stale"] = time.Now()
-		Notify("Quietport", "Your shared folders have not been able to update for more than a week. Please contact "+a.store.Config().OperatorName+".")
+		Notify("Quietport", "Your shared folders have not been able to update for more than a week. Check your internet connection, or ask the person who shared the folder with you."+".")
 	}
 }
 
@@ -575,7 +575,7 @@ func (a *Agent) notifyReprovision() {
 	}
 	a.stMu.Unlock()
 	if ok {
-		Notify("Quietport", "A shared folder's key was changed and this computer needs a new invitation. Please contact "+a.store.Config().OperatorName+".")
+		Notify("Quietport", "A shared folder's key was changed and this computer needs a new invitation. Ask the folder's owner for a new link."+".")
 	}
 }
 

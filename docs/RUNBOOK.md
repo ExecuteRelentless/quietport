@@ -54,6 +54,10 @@ person record from the typed name (no email), a mesh user and a pre-auth key. Wo
   as `<name>-xxxx` with no email, `qpctl logs <inviter>` shows `invite.created`.
 - Undo: `qpctl invite revoke <prefix>` before it is used; `qpctl offboard <person> --confirm <person>` after.
 
+The invite page and the installer name the person who made the link ("Austin has shared the folder X with you";
+0.1.14+, column `invite.inviter_name`), never the operator, unless the operator made the invite. People carry the
+name they typed (`person.display_name`) next to the slug, and the Share page's people list shows that name.
+
 The same page has **Start a new folder** (0.1.12+): a member types a name, the hub makes a bucket with `signup_quota`
 bytes, storage credentials and the circle record with that person as owner, and the member's device generates the
 circle key (the hub and the operator keystore never hold it, same caveat as open signup). The folder appears in QPSync

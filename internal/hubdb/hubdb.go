@@ -65,6 +65,8 @@ func Open(path string) (*DB, error) {
 	}
 	// additive migrations
 	_, _ = d.Exec(`ALTER TABLE circle ADD COLUMN invite_policy TEXT NOT NULL DEFAULT 'members'`)
+	_, _ = d.Exec(`ALTER TABLE invite ADD COLUMN inviter_name TEXT NOT NULL DEFAULT ''`)
+	_, _ = d.Exec(`ALTER TABLE person ADD COLUMN display_name TEXT NOT NULL DEFAULT ''`)
 	_, _ = d.Exec(`ALTER TABLE circle ADD COLUMN owner_person_id INTEGER NOT NULL DEFAULT 0`)
 	// audit_log is append-only (FR-93): forbid UPDATE/DELETE at the engine level.
 	_, _ = d.Exec(`CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END;`)
@@ -154,7 +156,7 @@ func (d *DB) Events(personID int64, limit int) ([]model.Event, error) {
 func scanPerson(r interface{ Scan(...any) error }) (model.Person, error) {
 	var p model.Person
 	var c string
-	err := r.Scan(&p.ID, &p.Name, &p.Email, &p.Household, &p.HSUser, &p.HSUserID, &p.Status, &c)
+	err := r.Scan(&p.ID, &p.Name, &p.Email, &p.Household, &p.HSUser, &p.HSUserID, &p.Status, &c, &p.DisplayName)
 	p.CreatedAt = ts(c)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
@@ -162,11 +164,11 @@ func scanPerson(r interface{ Scan(...any) error }) (model.Person, error) {
 	return p, err
 }
 
-const personCols = `id,name,email,household,hs_user,hs_user_id,status,created_at`
+const personCols = `id,name,email,household,hs_user,hs_user_id,status,created_at,display_name`
 
 func (d *DB) PersonAdd(p model.Person) (model.Person, error) {
-	res, err := d.Exec(`INSERT INTO person(name,email,household,hs_user,hs_user_id,status,created_at) VALUES(?,?,?,?,?,?,?)`,
-		p.Name, p.Email, p.Household, p.HSUser, p.HSUserID, model.StatusActive, now())
+	res, err := d.Exec(`INSERT INTO person(name,email,household,hs_user,hs_user_id,status,created_at,display_name) VALUES(?,?,?,?,?,?,?,?)`,
+		p.Name, p.Email, p.Household, p.HSUser, p.HSUserID, model.StatusActive, now(), p.DisplayName)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return p, fmt.Errorf("person %q already exists", p.Name)
@@ -446,14 +448,14 @@ type InviteRow struct {
 	ConsumedIP   string
 }
 
-const inviteCols = `i.id,i.code_hash,i.prefix,i.person_id,p.name,i.circle_ids,i.preauth_key,i.preauth_key_id,i.sealed_keys,i.created_at,i.expires_at,i.consumed_at,i.consumed_ip,i.revoked`
+const inviteCols = `i.id,i.code_hash,i.prefix,i.person_id,p.name,i.circle_ids,i.preauth_key,i.preauth_key_id,i.sealed_keys,i.created_at,i.expires_at,i.consumed_at,i.consumed_ip,i.revoked,i.inviter_name`
 
 func scanInvite(r interface{ Scan(...any) error }) (InviteRow, error) {
 	var v InviteRow
 	var cids, c, e string
 	var consumed sql.NullString
 	var rev int
-	err := r.Scan(&v.ID, &v.CodeHash, &v.Prefix, &v.PersonID, &v.PersonName, &cids, &v.PreAuthKey, &v.PreAuthKeyID, &v.SealedKeys, &c, &e, &consumed, &v.ConsumedIP, &rev)
+	err := r.Scan(&v.ID, &v.CodeHash, &v.Prefix, &v.PersonID, &v.PersonName, &cids, &v.PreAuthKey, &v.PreAuthKeyID, &v.SealedKeys, &c, &e, &consumed, &v.ConsumedIP, &rev, &v.InviterName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
 	}
@@ -466,8 +468,8 @@ func scanInvite(r interface{ Scan(...any) error }) (InviteRow, error) {
 }
 func (d *DB) InviteAdd(v InviteRow) (InviteRow, error) {
 	cids, _ := json.Marshal(v.CircleIDs)
-	res, err := d.Exec(`INSERT INTO invite(code_hash,prefix,person_id,circle_ids,preauth_key,preauth_key_id,sealed_keys,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-		v.CodeHash, v.Prefix, v.PersonID, string(cids), v.PreAuthKey, v.PreAuthKeyID, v.SealedKeys, now(), v.ExpiresAt.UTC().Format(time.RFC3339))
+	res, err := d.Exec(`INSERT INTO invite(code_hash,prefix,person_id,circle_ids,preauth_key,preauth_key_id,sealed_keys,created_at,expires_at,inviter_name) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		v.CodeHash, v.Prefix, v.PersonID, string(cids), v.PreAuthKey, v.PreAuthKeyID, v.SealedKeys, now(), v.ExpiresAt.UTC().Format(time.RFC3339), v.InviterName)
 	if err != nil {
 		return v, err
 	}

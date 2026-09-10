@@ -119,15 +119,10 @@ func runStart(host, name, folder string, support *string) error {
 		return errors.New("the server did not accept a new folder.")
 	}
 	var p struct {
-		Code           string `json:"code"`
-		SupportContact string `json:"support_contact"`
-		OperatorName   string `json:"operator_name"`
+		Code string `json:"code"`
 	}
 	if json(pl, &p) != nil || p.Code == "" {
 		return errors.New("the server sent an unexpected reply.")
-	}
-	if p.SupportContact != "" {
-		*support = p.OperatorName + " (" + p.SupportContact + ")"
 	}
 	plPath := filepath.Join(app, "payload.json")
 	if err := os.WriteFile(plPath, pl, 0o600); err != nil {
@@ -173,8 +168,7 @@ func parseLink(s string) (host, code string) {
 }
 
 type payload struct {
-	SupportContact string `json:"support_contact"`
-	OperatorName   string `json:"operator_name"`
+	InviterName string `json:"inviter_name"`
 }
 
 func run(host, code string, support *string) error {
@@ -208,8 +202,8 @@ func run(host, code string, support *string) error {
 		return errors.New("this invitation link is no longer valid.")
 	}
 	var p payload
-	if json(pl, &p) == nil && p.SupportContact != "" {
-		*support = p.OperatorName + " (" + p.SupportContact + ")"
+	if json(pl, &p) == nil && p.InviterName != "" {
+		*support = p.InviterName + ", who sent you the link"
 	}
 	plPath := filepath.Join(app, "payload.json")
 	if err := os.WriteFile(plPath, pl, 0o600); err != nil {

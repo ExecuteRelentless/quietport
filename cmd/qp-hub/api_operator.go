@@ -103,7 +103,7 @@ func (h *Hub) opPersonAdd(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	p, err := h.db.PersonAdd(model.Person{Name: in.Name, Email: in.Email, Household: in.Household, HSUser: in.Name, HSUserID: uid})
+	p, err := h.db.PersonAdd(model.Person{Name: in.Name, DisplayName: in.Name, Email: in.Email, Household: in.Household, HSUser: in.Name, HSUserID: uid})
 	if err != nil {
 		writeErr(w, 409, err.Error())
 		return
@@ -545,7 +545,7 @@ func (h *Hub) opInviteCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pakID, _ := pak.ID.Int64()
-	inv, err := h.db.InviteAdd(hubdb.InviteRow{Invite: model.Invite{CodeHash: in.CodeHash, PersonID: p.ID, CircleIDs: in.CircleIDs, ExpiresAt: time.Now().Add(ttl), Prefix: in.Prefix},
+	inv, err := h.db.InviteAdd(hubdb.InviteRow{Invite: model.Invite{InviterName: h.cfg.OperatorName, CodeHash: in.CodeHash, PersonID: p.ID, CircleIDs: in.CircleIDs, ExpiresAt: time.Now().Add(ttl), Prefix: in.Prefix},
 		PreAuthKey: pak.Key, PreAuthKeyID: pakID, SealedKeys: in.SealedKeys})
 	if err != nil {
 		writeErr(w, 500, err.Error())

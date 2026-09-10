@@ -114,16 +114,18 @@ func (h *Hub) inviteGate(w http.ResponseWriter, r *http.Request) (string, bool) 
 }
 
 type invitePageData struct {
-	OS        string // mac | win | other
-	Host      string
-	Code      string
-	Operator  string
-	Support   string
-	Circles   []string
-	Mac1      string
-	Win1      string
-	MacApp    bool // notarized installer published
-	WinApp    bool
+	OS       string // mac | win | other
+	Host     string
+	Code     string
+	Operator string
+	Inviter  string // who made the link; the operator only for operator-made invites
+	Folder   string // the folder's name when the invite covers exactly one
+	Support  string
+	Circles  []string
+	Mac1     string
+	Win1     string
+	MacApp   bool // notarized installer published
+	WinApp   bool
 }
 
 func detectOS(ua string) string {
@@ -154,7 +156,13 @@ func (h *Hub) invitePage(w http.ResponseWriter, r *http.Request) {
 			circles = append(circles, c.DisplayName)
 		}
 	}
-	d := invitePageData{OS: detectOS(r.UserAgent()), Host: h.cfg.Host, Code: code, Operator: h.cfg.OperatorName, Support: h.cfg.SupportContact, Circles: circles}
+	d := invitePageData{OS: detectOS(r.UserAgent()), Host: h.cfg.Host, Code: code, Operator: h.cfg.OperatorName, Inviter: inv.InviterName, Support: h.cfg.SupportContact, Circles: circles}
+	if d.Inviter == "" {
+		d.Inviter = h.cfg.OperatorName
+	}
+	if len(circles) == 1 {
+		d.Folder = circles[0]
+	}
 	d.Mac1 = fmt.Sprintf(`curl -fsSL https://%s/j/%s/mac | sh`, h.cfg.Host, code)
 	d.Win1 = fmt.Sprintf(`irm https://%s/j/%s/win | iex`, h.cfg.Host, code)
 	d.MacApp, d.WinApp = h.installerAvailable("dmg"), h.installerAvailable("win")
@@ -242,7 +250,7 @@ func (h *Hub) invitePayload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := model.InvitePayload{LoginServer: "https://" + h.cfg.Host, PreAuthKey: inv.PreAuthKey, HubAPI: "http://" + h.cfg.TailnetIP + ":" + h.cfg.AgentAPIPort,
-		SupportContact: h.cfg.SupportContact, OperatorName: h.cfg.OperatorName, Circles: names, SealedKeys: sealed, AgentVersion: Version}
+		SupportContact: h.cfg.SupportContact, OperatorName: h.cfg.OperatorName, InviterName: inv.InviterName, Circles: names, SealedKeys: sealed, AgentVersion: Version}
 	h.db.Event("invite.retrieved", inv.PersonID, 0, fmt.Sprintf("%s from %s", inv.Prefix, clientIP(r)))
 	h.db.Audit("system", "invite.retrieved", inv.PersonName, inv.Prefix)
 	go h.notifyOperator(fmt.Sprintf("Quietport: %s opened their invitation", inv.PersonName), fmt.Sprintf("%s retrieved the installer for invite %s at %s.", inv.PersonName, inv.Prefix, time.Now().Format(time.RFC1123)))
@@ -346,7 +354,7 @@ func (h *Hub) selfStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	p, err := h.db.PersonAdd(model.Person{Name: pslug, Household: pslug, HSUser: pslug, HSUserID: uid})
+	p, err := h.db.PersonAdd(model.Person{Name: pslug, DisplayName: name, Household: pslug, HSUser: pslug, HSUserID: uid})
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -379,7 +387,7 @@ func (h *Hub) selfStart(w http.ResponseWriter, r *http.Request) {
 	}
 	pakID, _ := pak.ID.Int64()
 	code := cryptobox.NewInviteCode()
-	inv, err := h.db.InviteAdd(hubdb.InviteRow{Invite: model.Invite{CodeHash: cryptobox.HashToken(code), PersonID: p.ID, CircleIDs: []int64{c.ID}, ExpiresAt: time.Now().Add(2 * time.Hour), Prefix: code[:6]},
+	inv, err := h.db.InviteAdd(hubdb.InviteRow{Invite: model.Invite{InviterName: name, CodeHash: cryptobox.HashToken(code), PersonID: p.ID, CircleIDs: []int64{c.ID}, ExpiresAt: time.Now().Add(2 * time.Hour), Prefix: code[:6]},
 		PreAuthKey: pak.Key, PreAuthKeyID: pakID, SealedKeys: "-"})
 	if err != nil {
 		writeErr(w, 500, err.Error())
@@ -401,4 +409,17 @@ func (h *Hub) selfStart(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, model.InvitePayload{LoginServer: "https://" + h.cfg.Host, PreAuthKey: pak.Key, HubAPI: "http://" + h.cfg.TailnetIP + ":" + h.cfg.AgentAPIPort,
 		SupportContact: h.cfg.SupportContact, OperatorName: h.cfg.OperatorName, Circles: []string{folder}, SealedKeys: "", AgentVersion: Version,
 		NewCircleID: c.ID, NewCircleSlug: c.Slug, Code: code})
+}
+
+var suffixRe = regexp.MustCompile(`-[a-z2-7]{4}$`)
+
+// displayName drops the 4-character uniqueness suffix that member-made people carry ("sam-k3q7" -> "sam").
+func displayName(n string) string { return suffixRe.ReplaceAllString(n, "") }
+
+// personLabel is the name to show other members: what the person typed, else the slug without its suffix.
+func personLabel(p model.Person) string {
+	if p.DisplayName != "" {
+		return p.DisplayName
+	}
+	return displayName(p.Name)
 }

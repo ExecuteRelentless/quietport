@@ -54,7 +54,9 @@ func (h *Hub) routesAgent(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /v1/circles/{id}/opkey/{ak}", h.withDevice(h.handleCircleOpKeyDeleteDevice))
 	mux.HandleFunc("POST /v1/circles/{id}/generation", h.withDevice(h.handleCircleGenerationDevice))
 	mux.HandleFunc("POST /v1/circles/{id}/grants", h.withDevice(h.handleCircleGrantsDevice))
-	mux.HandleFunc("GET /v1/ping", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"ok": true, "time": time.Now().UTC()}) })
+	mux.HandleFunc("GET /v1/ping", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"ok": true, "time": time.Now().UTC()})
+	})
 }
 
 func (h *Hub) withDevice(next func(http.ResponseWriter, *http.Request, model.Device)) http.HandlerFunc {
@@ -327,7 +329,7 @@ func (h *Hub) handleDeviceInvite(w http.ResponseWriter, r *http.Request, dev mod
 		writeErr(w, 500, err.Error())
 		return
 	}
-	p, err := h.db.PersonAdd(model.Person{Name: slug, Email: "", Household: inviter.Household, HSUser: slug, HSUserID: uid})
+	p, err := h.db.PersonAdd(model.Person{Name: slug, DisplayName: name, Email: "", Household: inviter.Household, HSUser: slug, HSUserID: uid})
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -343,7 +345,7 @@ func (h *Hub) handleDeviceInvite(w http.ResponseWriter, r *http.Request, dev mod
 		return
 	}
 	pakID, _ := pak.ID.Int64()
-	inv, err := h.db.InviteAdd(hubdb.InviteRow{Invite: model.Invite{CodeHash: req.CodeHash, PersonID: p.ID, CircleIDs: []int64{c.ID}, ExpiresAt: time.Now().Add(ttl), Prefix: req.Prefix},
+	inv, err := h.db.InviteAdd(hubdb.InviteRow{Invite: model.Invite{InviterName: personLabel(inviter), CodeHash: req.CodeHash, PersonID: p.ID, CircleIDs: []int64{c.ID}, ExpiresAt: time.Now().Add(ttl), Prefix: req.Prefix},
 		PreAuthKey: pak.Key, PreAuthKeyID: pakID, SealedKeys: req.SealedKeys})
 	if err != nil {
 		writeErr(w, 500, err.Error())
@@ -389,7 +391,11 @@ func (h *Hub) circlePeople(c model.Circle, dev model.Device) []model.CirclePerso
 				act = append(act, d)
 			}
 		}
-		out = append(out, model.CirclePerson{PersonID: m.PersonID, Name: m.PersonName, Role: m.Role, Self: m.PersonID == dev.PersonID, Devices: act})
+		label := m.PersonName
+		if per, err := h.db.PersonByID(m.PersonID); err == nil {
+			label = personLabel(per)
+		}
+		out = append(out, model.CirclePerson{PersonID: m.PersonID, Name: label, Role: m.Role, Self: m.PersonID == dev.PersonID, Devices: act})
 	}
 	return out
 }
