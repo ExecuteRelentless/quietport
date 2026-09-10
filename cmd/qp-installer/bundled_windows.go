@@ -1,13 +1,18 @@
 package main
 
 import (
-	_ "embed"
+	"embed"
 )
 
 // bundle.zip is placed here by scripts/build-installer.sh (the quietport-windows-amd64 client bundle).
 //
-//go:embed bundle.zip
-var bundleZip []byte
+// The bundle directory always exists (bundle/.keep) so the package compiles without a client build;
+// scripts/build-installer.sh drops bundle.zip into it for a release.
+//
+//go:embed all:bundle
+var bundleFS embed.FS
+
+var bundleZip, _ = bundleFS.ReadFile("bundle/bundle.zip")
 
 func installBundled(app string) error {
 	if len(bundleZip) == 0 {

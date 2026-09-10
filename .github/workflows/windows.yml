@@ -46,7 +46,7 @@ jobs:
         env: { CGO_ENABLED: "0", GOOS: windows, GOARCH: amd64 }
         run: |
           V=${{ steps.v.outputs.version }}
-          (cd out/client && zip -q -j ../../cmd/qp-installer/bundle.zip ./*)
+          (cd out/client && zip -q -j ../../cmd/qp-installer/bundle/bundle.zip ./*)
           LD="-X main.Version=$V -X main.DefaultHost=${{ vars.HUB_HOST }} -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=${{ vars.RELEASE_PUBKEY }}"
           go build -trimpath -ldflags "$LD -H windowsgui" -o out/Quietport.exe ./cmd/qp-installer
       - name: Upload unsigned artifacts

@@ -1,7 +1,7 @@
 dist/
 *.tmp
-cmd/qp-installer/bundle.zip
-cmd/qp-installer/bundle.tar.gz
+cmd/qp-installer/bundle/*
+!cmd/qp-installer/bundle/.keep
 *.syso
 winres/.gen.json
 qp-hub

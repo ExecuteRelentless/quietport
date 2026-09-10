@@ -97,17 +97,17 @@ echo "== Linux installers (client tarball embedded, terminal prompts)"
 for a in amd64 arm64; do
   LT="$R/dist/$V/quietport-linux-$a-$V.tar.gz"
   [ -f "$LT" ] || { echo "run scripts/build.sh $V first ($LT missing)"; exit 1; }
-  cp "$LT" "$R/cmd/qp-installer/bundle.tar.gz"
+  cp "$LT" "$R/cmd/qp-installer/bundle/bundle.tar.gz"
   CGO_ENABLED=0 GOOS=linux GOARCH=$a go build -trimpath -ldflags "$LD" -o "$R/dist/$V/quietport-installer-linux-$a" ./cmd/qp-installer
-  rm -f "$R/cmd/qp-installer/bundle.tar.gz"
+  rm -f "$R/cmd/qp-installer/bundle/bundle.tar.gz"
 done
 
 echo "== Windows installer exe (client zip embedded)"
 WZ="$R/dist/$V/quietport-windows-amd64-$V.zip"
 [ -f "$WZ" ] || { echo "run scripts/build.sh $V first ($WZ missing)"; exit 1; }
-cp "$WZ" "$R/cmd/qp-installer/bundle.zip"
+cp "$WZ" "$R/cmd/qp-installer/bundle/bundle.zip"
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDW -H windowsgui" -o "$R/dist/$V/quietport-installer-windows-amd64.exe" ./cmd/qp-installer
-rm -f "$R/cmd/qp-installer/bundle.zip"
+rm -f "$R/cmd/qp-installer/bundle/bundle.zip"
 echo "== add the installers to the signed checksum list"
 if [ -f "$R/../release-keys/release.key" ]; then
   for f in "$R/dist/$V/quietport-installer-darwin.dmg" "$R/dist/$V/quietport-installer-windows-amd64.exe" "$R/dist/$V/quietport-installer-darwin.tar.gz" "$R/dist/$V/quietport-installer-linux-amd64" "$R/dist/$V/quietport-installer-linux-arm64"; do
