@@ -1,0 +1,64 @@
+name: diag-windows
+# Diagnostic only: reproduces the Windows install failure ("could not reach the network") on a hosted
+# Windows runner. Builds stock tailscaled 1.102.3, a build whose named-pipe security descriptor names
+# no owner, and .github/diag/pipeprobe; runs the probe elevated (control), under a Safer normal-user
+# token, and as a freshly created standard local user. Read the PROBE: lines in the log.
+on:
+  push:
+    branches: ["diag/**"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.27" }
+      - name: Build tailscaled (stock and no-owner pipe), tailscale CLI and the probe
+        shell: bash
+        run: |
+          set -e
+          B=/c/Users/Public/qpdiag/bin
+          mkdir -p "$B" /tmp/ts
+          cd /tmp/ts && (go mod init tsbuild >/dev/null 2>&1 || true)
+          export GOFLAGS=-mod=mod
+          go get tailscale.com@v1.102.3
+          go build -trimpath -ldflags "-s -w" -o "$B/tailscaled.exe" tailscale.com/cmd/tailscaled
+          go build -trimpath -ldflags "-s -w" -o "$B/tailscale.exe" tailscale.com/cmd/tailscale
+          go build -trimpath -ldflags "-s -w -X tailscale.com/safesocket.windowsSDDL=D:PAI(A;OICI;GWGR;;;BU)(A;OICI;GWGR;;;SY)" -o "$B/tailscaled-noowner.exe" tailscale.com/cmd/tailscaled
+          unset GOFLAGS
+          cd "$GITHUB_WORKSPACE/.github/diag/pipeprobe" && go build -o "$B/pipeprobe.exe" .
+          ls -l "$B"
+      - name: 1. Control run (runner account)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $B='C:\Users\Public\qpdiag\bin'; $W='C:\Users\Public\qpdiag\work-admin'
+          New-Item -ItemType Directory -Force $W | Out-Null
+          whoami /groups | Select-String 'Administrators|Mandatory Label'
+          & "$B\pipeprobe.exe" $B $W
+      - name: 2. Non-admin run under a Safer normal-user token
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $B='C:\Users\Public\qpdiag\bin'; $W='C:\Users\Public\qpdiag\work-safer'
+          New-Item -ItemType Directory -Force $W | Out-Null
+          & "$B\pipeprobe.exe" --as-normal-user $B $W
+      - name: 3. Non-admin run as a standard local user
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $B='C:\Users\Public\qpdiag\bin'; $W='C:\Users\Public\qpdiag\work-std'
+          New-Item -ItemType Directory -Force $W | Out-Null
+          icacls C:\Users\Public\qpdiag /grant 'Users:(OI)(CI)M' /T | Out-Null
+          $pw = ConvertTo-SecureString 'Qp-diag-2026!x' -AsPlainText -Force
+          New-LocalUser -Name qpstd -Password $pw -PasswordNeverExpires -AccountNeverExpires | Out-Null
+          Add-LocalGroupMember -Group Users -Member qpstd
+          $cred = New-Object System.Management.Automation.PSCredential('qpstd', $pw)
+          $p = Start-Process -FilePath "$B\pipeprobe.exe" -ArgumentList @($B, $W) -Credential $cred -WorkingDirectory $W -RedirectStandardOutput "$W\out.txt" -RedirectStandardError "$W\err.txt" -PassThru -Wait
+          Get-Content "$W\out.txt" -ErrorAction SilentlyContinue
+          Get-Content "$W\err.txt" -ErrorAction SilentlyContinue
+          "exit=$($p.ExitCode)"
