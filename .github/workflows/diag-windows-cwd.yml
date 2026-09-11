@@ -1,0 +1,74 @@
+name: diag-windows-cwd
+# Diagnostic only: the background agent started in C:\Windows\System32, the working directory Task Scheduler gives it.
+# Up to 0.1.18 the crypt remote "C:" was the C drive on Windows, so a member's folder was bisynced with System32
+# (2026-09-11). "shipped" runs the published agent, "fix" runs qpsync-agent.exe built from this branch; each has its
+# own circle so the operator can check afterwards which bucket received the proof file. One single-use invite per job
+# (secrets QP_CI_CWD_*). Read the CWD: lines.
+on:
+  push:
+    branches: ["diag/windows-cwd"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  agent:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.27" }
+      - name: Build qpsync-agent.exe for Windows from this branch
+        env: { CGO_ENABLED: "0", GOOS: windows, GOARCH: amd64 }
+        run: |
+          V=0.1.19
+          go build -trimpath -ldflags "-X main.Version=$V -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=${{ vars.RELEASE_PUBKEY }}" -o qpsync-agent.exe ./cmd/qpsync-agent
+      - uses: actions/upload-artifact@v4
+        with: { name: agent-fix, path: qpsync-agent.exe }
+  cwd:
+    needs: agent
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: shipped, secret: QP_CI_CWD_SHIPPED }
+          - { variant: fix, secret: QP_CI_CWD_FIX }
+    name: cwd ${{ matrix.variant }}
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        if: matrix.variant == 'fix'
+        with: { name: agent-fix, path: C:\Users\Public\qpe2e\fix }
+      - name: Stage the client bundle, this job's agent and the invite payload
+        shell: pwsh
+        env:
+          CODE: ${{ secrets[matrix.secret] }}
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $E = 'C:\Users\Public\qpe2e'
+          New-Item -ItemType Directory -Force "$E\bundle", "$E\agent" | Out-Null
+          Invoke-WebRequest -Uri https://quietport.app/dl/quietport-windows-amd64.zip -OutFile "$E\bundle.zip"
+          Expand-Archive "$E\bundle.zip" -DestinationPath "$E\bundle" -Force
+          "CWD: published bundle VERSION $(Get-Content "$E\bundle\VERSION"), variant ${{ matrix.variant }}"
+          if ('${{ matrix.variant }}' -eq 'fix') { Copy-Item "$E\fix\qpsync-agent.exe" "$E\agent\" } else { Copy-Item "$E\bundle\qpsync-agent.exe" "$E\agent\" }
+          Get-FileHash "$E\agent\qpsync-agent.exe" | ForEach-Object { "CWD: agent sha256 $($_.Hash.Substring(0,16))" }
+          Invoke-WebRequest -Uri "https://quietport.app/j/$env:CODE/payload" -OutFile "$E\payload.json"
+          Set-Content -Path "$E\code.txt" -Value $env:CODE -NoNewline
+          Set-Content -Path "$E\proof.txt" -Value "ci-proof-${{ github.run_id }}-${{ matrix.variant }}.txt" -NoNewline
+          Copy-Item "$env:GITHUB_WORKSPACE\.github\diag\e2e\cwd.ps1" "$E\cwd.ps1"
+          Set-Content -Path "$E\run.cmd" -Value "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$E\cwd.ps1`" > `"$E\out.txt`" 2>&1`r`n"
+          icacls $E /grant 'Users:(OI)(CI)M' /T | Out-Null
+      - name: Install, then run the agent from C:\Windows\System32 (standard local user via PsExec)
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $E = 'C:\Users\Public\qpe2e'
+          $pw = ConvertTo-SecureString 'Qp-e2e-2026!x' -AsPlainText -Force
+          New-LocalUser -Name qpstd -Password $pw -PasswordNeverExpires -AccountNeverExpires | Out-Null
+          Add-LocalGroupMember -Group Users -Member qpstd
+          Invoke-WebRequest -Uri https://download.sysinternals.com/files/PSTools.zip -OutFile pstools.zip
+          Expand-Archive pstools.zip -DestinationPath pstools -Force
+          & .\pstools\PsExec64.exe -accepteula -nobanner -u qpstd -p 'Qp-e2e-2026!x' -w $E cmd /c "$E\run.cmd" 2>&1 | Out-String
+          "----- out.txt -----"
+          Get-Content "$E\out.txt" -ErrorAction SilentlyContinue
