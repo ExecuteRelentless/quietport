@@ -227,3 +227,36 @@ func TestWriteErrShape(t *testing.T) {
 	}
 	_ = http.StatusOK
 }
+
+// A shared invite link gets a real preview card in Messages, WhatsApp and Slack: the invite page must declare the
+// same Open Graph image as the site, name the inviter in the title, and never name the folder (unfurl bots see it).
+func TestInvitePageSharePreview(t *testing.T) {
+	var buf bytes.Buffer
+	d := invitePageData{OS: "mac", Host: "quietport.app", Code: "abc", Inviter: "Alex", Folder: "Tax papers", MacApp: true}
+	if err := tmpl.ExecuteTemplate(&buf, "invite.html", d); err != nil {
+		t.Fatal(err)
+	}
+	page := buf.String()
+	head := page[:strings.Index(page, "</head>")]
+	for _, want := range []string{
+		`<meta property="og:title" content="Alex has shared a private folder with you">`,
+		`<meta property="og:image" content="https://quietport.app/assets/og-card.png">`,
+		`<meta property="og:image:width" content="1200">`,
+		`<meta name="twitter:card" content="summary_large_image">`,
+		`<meta property="og:description" content="`,
+	} {
+		if !strings.Contains(head, want) {
+			t.Errorf("invite page head lacks %s", want)
+		}
+	}
+	if strings.Contains(head, "Tax papers") {
+		t.Error("the folder name must not appear in the preview tags")
+	}
+	buf.Reset()
+	if err := tmpl.ExecuteTemplate(&buf, "gone.html", map[string]string{"Operator": "Quietport"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), `<meta property="og:image" content="https://quietport.app/assets/og-card.png">`) {
+		t.Error("gone page lacks the share card")
+	}
+}
