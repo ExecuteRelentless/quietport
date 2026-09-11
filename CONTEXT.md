@@ -90,10 +90,20 @@ the invite code comes from the file name, the app folder name, or a pasted link.
 The Headscale-controlled WireGuard network. The hub is `100.64.0.1`, tagged `tag:hub`; every device runs userspace
 tailscaled with a local SOCKS5 proxy that rclone and the agent use.
 
+**Mesh identity**:
+The keys that identify one device on the mesh. Every install creates a new one, so a new install never inherits an
+earlier attempt's.
+_Avoid_: machine key, node key (Headscale's terms; use them only when talking to Headscale)
+
+**Mesh user**:
+A person's identity in Headscale, holding the mesh nodes of all that person's devices.
+_Avoid_: user on its own
+
 ## Relationships
 
 - A **hub** has many **persons**, **circles** and **devices**.
 - A **person** has many **devices** and many **memberships**; a **circle** has many **members** and one **owner**.
+- A **person** has one **mesh user**; a **device** has one **mesh identity**, new with every install.
 - An **invite** targets one **person** and one or more **circles**, records one **inviter**, and is consumed once.
 - A **device** holds one **sealed grant** per **circle** and **generation** it may open.
 - The **operator** is a **person** only if they enrol a device of their own; `qpctl` needs no membership.
@@ -104,4 +114,7 @@ tailscaled with a local SOCKS5 proxy that rclone and the agent use.
 - "operator" vs "owner": resolved. Different roles; the site never mentions either, it says "the person who shared
   the folder with you".
 - "token": resolved. A **device token** is the bearer secret; an invite has a **code**.
-- "user": never. It is a **person** on the hub, a **member** in a circle, a **device** on a computer.
+- "user": never. It is a **person** on the hub, a **member** in a circle, a **device** on a computer, a **mesh user**
+  in Headscale.
+- "account" / "standard user": resolved. Windows' words for a login on a computer, with or without administrator
+  rights; use them only when talking about Windows permissions, never for a person.
