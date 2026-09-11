@@ -62,27 +62,16 @@ jobs:
           Get-Content "$W\out.txt" -ErrorAction SilentlyContinue
           Get-Content "$W\err.txt" -ErrorAction SilentlyContinue
           "exit=$($p.ExitCode)"
-      - name: 4. Standard local user via Task Scheduler (real logon, profile loaded)
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          $B='C:\Users\Public\qpdiag\bin'; $W='C:\Users\Public\qpdiag\work-task'
-          New-Item -ItemType Directory -Force $W | Out-Null
-          icacls C:\Users\Public\qpdiag /grant 'Users:(OI)(CI)M' /T | Out-Null
-          Set-Content -Path "$B\runprobe.cmd" -Value "@echo off`r`n`"$B\pipeprobe.exe`" `"$B`" `"$W`" > `"$W\out.txt`" 2>&1`r`n"
-          schtasks /create /tn qpdiag /tr "$B\runprobe.cmd" /sc once /st 00:00 /ru qpstd /rp 'Qp-diag-2026!x' /rl LIMITED /f
-          schtasks /run /tn qpdiag
-          $deadline=(Get-Date).AddSeconds(150)
-          do { Start-Sleep 5; $st = (schtasks /query /tn qpdiag /fo csv /v | ConvertFrom-Csv).Status } while ($st -eq 'Running' -and (Get-Date) -lt $deadline)
-          "task status: $st"
-          Get-Content "$W\out.txt" -ErrorAction SilentlyContinue
-          schtasks /delete /tn qpdiag /f
-      - name: 5. Standard local user via PsExec (real logon, profile loaded)
+      - name: 4. Standard local user via PsExec (real logon, profile loaded)
         shell: pwsh
         continue-on-error: true
         run: |
           $B='C:\Users\Public\qpdiag\bin'; $W='C:\Users\Public\qpdiag\work-psexec'
           New-Item -ItemType Directory -Force $W | Out-Null
+          icacls C:\Users\Public\qpdiag /grant 'Users:(OI)(CI)M' /T | Out-Null
+          Set-Content -Path "$B\runprobe.cmd" -Value "@echo off`r`nset USERPROFILE`r`nset LOCALAPPDATA`r`n`"$B\pipeprobe.exe`" `"$B`" `"$W`" > `"$W\out.txt`" 2>&1`r`n"
           Invoke-WebRequest -Uri https://download.sysinternals.com/files/PSTools.zip -OutFile pstools.zip
           Expand-Archive pstools.zip -DestinationPath pstools -Force
-          & .\pstools\PsExec64.exe -accepteula -nobanner -u qpstd -p 'Qp-diag-2026!x' "$B\pipeprobe.exe" $B $W 2>&1 | Out-String
+          & .\pstools\PsExec64.exe -accepteula -nobanner -u qpstd -p 'Qp-diag-2026!x' -w $W cmd /c "$B\runprobe.cmd" 2>&1 | Out-String
+          "----- out.txt -----"
+          Get-Content "$W\out.txt" -ErrorAction SilentlyContinue
