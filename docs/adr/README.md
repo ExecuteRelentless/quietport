@@ -14,3 +14,4 @@ A decision is superseded by adding a new record, never by editing the old one.
 - [0009 The site welcomes search engines and AI crawlers](0009-site-welcomes-crawlers.md)
 - [0010 tailscaled runs unelevated on Windows, so the Windows daemon is built with two flags](0010-windows-tailscaled-unelevated.md)
 - [0011 On Windows the agent runs tailscaled in Unattended Mode](0011-windows-unattended-mode.md)
+- [0012 Every install starts with a new mesh identity](0012-install-starts-with-new-mesh-identity.md)

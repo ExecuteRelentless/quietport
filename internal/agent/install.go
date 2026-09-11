@@ -48,6 +48,11 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 		port = old.SocksPort
 		stopRunningAgent()
 	}
+	// an earlier install on this account, finished or not, left its mesh identity behind; reusing it re-registers the old
+	// node key, which the hub still holds for that attempt, and the hub then drops this device's traffic (docs/adr/0012)
+	if err := resetMeshState(TSDir()); err != nil {
+		return errors.New("the previous network settings on this computer could not be cleared.")
+	}
 	_ = os.MkdirAll(SyncRoot(), 0o755)
 	for _, name := range p.Circles {
 		_ = os.MkdirAll(CircleDir(name), 0o755) // FR-15
@@ -145,6 +150,20 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 		return errors.New("the background service could not be started.")
 	}
 	return nil
+}
+
+// resetMeshState removes tailscaled's state directory (machine key, node key, login profiles) before an install, so
+// every install registers a new node instead of re-registering the one an earlier attempt left behind (docs/adr/0012).
+// On Windows a tailscaled that was just stopped can hold its files for a moment, so removal is retried briefly.
+func resetMeshState(dir string) error {
+	var err error
+	for i := 0; i < 5; i++ {
+		if err = os.RemoveAll(dir); err == nil {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+	return err
 }
 
 func writeHelpers() {

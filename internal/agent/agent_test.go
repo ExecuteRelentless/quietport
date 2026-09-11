@@ -116,3 +116,21 @@ func TestUpArgsUnattendedOnWindows(t *testing.T) {
 		}
 	}
 }
+
+// A failed or earlier install leaves tailscaled's state behind. Reusing it made the next install register under the
+// old node key, which the hub already held for the first attempt, so the hub dropped the new node's traffic and the
+// install failed at enrolment (docs/adr/0012). Every install must start from an empty state directory.
+func TestResetMeshState(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "ts")
+	_ = os.MkdirAll(filepath.Join(dir, "profile-a3ed"), 0o700)
+	_ = os.WriteFile(filepath.Join(dir, "tailscaled.state"), []byte(`{"_machinekey":"old"}`), 0o600)
+	if err := resetMeshState(dir); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("state directory survived the reset (stat err=%v)", err)
+	}
+	if err := resetMeshState(filepath.Join(t.TempDir(), "never-created")); err != nil {
+		t.Fatalf("missing directory: %v", err)
+	}
+}
