@@ -58,7 +58,7 @@ jobs:
           New-LocalUser -Name qpstd -Password $pw -PasswordNeverExpires -AccountNeverExpires | Out-Null
           Add-LocalGroupMember -Group Users -Member qpstd
           $cred = New-Object System.Management.Automation.PSCredential('qpstd', $pw)
-          $p = Start-Process -FilePath "$B\pipeprobe.exe" -ArgumentList @($B, $W) -Credential $cred -WorkingDirectory $W -RedirectStandardOutput "$W\out.txt" -RedirectStandardError "$W\err.txt" -PassThru -Wait
+          $p = Start-Process -FilePath "$B\pipeprobe.exe" -ArgumentList @($B, $W) -Credential $cred -LoadUserProfile -WorkingDirectory $W -RedirectStandardOutput "$W\out.txt" -RedirectStandardError "$W\err.txt" -PassThru -Wait
           Get-Content "$W\out.txt" -ErrorAction SilentlyContinue
           Get-Content "$W\err.txt" -ErrorAction SilentlyContinue
           "exit=$($p.ExitCode)"

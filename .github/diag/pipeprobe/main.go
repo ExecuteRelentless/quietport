@@ -61,6 +61,7 @@ func main() {
 }
 
 func reportIdentity() {
+	fmt.Printf("PROBE: env USERPROFILE=%q LOCALAPPDATA=%q\n", os.Getenv("USERPROFILE"), os.Getenv("LOCALAPPDATA"))
 	tok := windows.GetCurrentProcessToken()
 	if u, err := tok.GetTokenUser(); err == nil {
 		acct, dom, _, _ := u.User.Sid.LookupAccount("")
