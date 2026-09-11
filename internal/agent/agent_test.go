@@ -134,3 +134,18 @@ func TestResetMeshState(t *testing.T) {
 		t.Fatalf("missing directory: %v", err)
 	}
 }
+
+// On Windows rclone reads a one-letter name before a colon as a drive letter, so the crypt remote "C:" was the C
+// drive: the agent's current directory there, which Task Scheduler sets to C:\Windows\System32. A member's folder was
+// bisynced with System32 instead of the hub (docs/adr/0013). Elsewhere the name stays "C": bisync keys its listings
+// by it, and renaming it would force every running Mac into a resync.
+func TestCryptRemoteIsNotADriveLetter(t *testing.T) {
+	if n := cryptName("windows"); len(n) < 2 {
+		t.Fatalf("windows: crypt remote %q is a drive letter to rclone", n)
+	}
+	for _, goos := range []string{"darwin", "linux"} {
+		if n := cryptName(goos); n != "C" {
+			t.Fatalf("%s: crypt remote renamed to %q; existing bisync listings are keyed by \"C\"", goos, n)
+		}
+	}
+}

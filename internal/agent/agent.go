@@ -45,6 +45,10 @@ func (a *Agent) logf(format string, args ...any) { a.logger.Printf(format, args.
 
 // Run is the main loop: tailscaled supervision, sync scheduler, heartbeat, versions pruning, disk watch.
 func Run(ctx context.Context) error {
+	// Task Scheduler starts the agent in C:\Windows\System32 and launchd in /; work from the app folder so that no
+	// relative path can ever resolve to one of those (docs/adr/0013)
+	_ = os.MkdirAll(AppDir(), 0o700)
+	_ = os.Chdir(AppDir())
 	store, err := OpenStore()
 	if err != nil {
 		return err

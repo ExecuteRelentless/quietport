@@ -28,6 +28,21 @@ type Rclone struct {
 
 var defaultExcludes = []string{"/" + VersionsDir + "/**", ".DS_Store", "Thumbs.db", "desktop.ini", "~$*", ".qp-*", "*.tmp.qp"} // FR-39
 
+// cryptName is the name of the crypt remote over the circle's bucket. On Windows rclone reads a single letter before
+// a colon as a drive letter, so "C:" there was the C drive: the agent's current directory, C:\Windows\System32 when
+// Task Scheduler starts it (docs/adr/0013). Elsewhere it stays "C", the name bisync keys its listings by.
+func cryptName(goos string) string {
+	if goos == "windows" {
+		return "QPCRYPT"
+	}
+	return "C"
+}
+
+var (
+	cryptRemote = cryptName(runtime.GOOS) + ":"                                     // path prefix: "C:" or "QPCRYPT:"
+	cryptEnv    = "RCLONE_CONFIG_" + strings.ToUpper(cryptName(runtime.GOOS)) + "_" // its environment prefix
+)
+
 func (r *Rclone) env(cs CircleState, key model.CircleKey, ak, sk, endpoint string) []string {
 	base := []string{}
 	for _, e := range os.Environ() {
@@ -49,8 +64,8 @@ func (r *Rclone) env(cs CircleState, key model.CircleKey, ak, sk, endpoint strin
 		"RCLONE_CONFIG_S3_ENDPOINT="+endpoint, "RCLONE_CONFIG_S3_REGION=garage", "RCLONE_CONFIG_S3_FORCE_PATH_STYLE=true",
 		"RCLONE_CONFIG_S3_CHUNK_SIZE=64M", "RCLONE_CONFIG_S3_UPLOAD_CONCURRENCY=2", "RCLONE_CONFIG_S3_LEAVE_PARTS_ON_ERROR=true", // FR-36
 		"RCLONE_CONFIG_S3_NO_CHECK_BUCKET=true",
-		"RCLONE_CONFIG_C_TYPE=crypt", "RCLONE_CONFIG_C_REMOTE=s3:"+cs.Bucket+"/g"+strconv.Itoa(cs.Generation), "RCLONE_CONFIG_C_FILENAME_ENCRYPTION=standard",
-		"RCLONE_CONFIG_C_DIRECTORY_NAME_ENCRYPTION=true", "RCLONE_CONFIG_C_PASSWORD="+obs(key.Password), "RCLONE_CONFIG_C_PASSWORD2="+obs(key.Salt),
+		cryptEnv+"TYPE=crypt", cryptEnv+"REMOTE=s3:"+cs.Bucket+"/g"+strconv.Itoa(cs.Generation), cryptEnv+"FILENAME_ENCRYPTION=standard",
+		cryptEnv+"DIRECTORY_NAME_ENCRYPTION=true", cryptEnv+"PASSWORD="+obs(key.Password), cryptEnv+"PASSWORD2="+obs(key.Salt),
 		"RCLONE_CONFIG_DIR="+filepath.Join(AppDir(), "rclone-nocfg"), "RCLONE_CONFIG=/dev/null",
 	)
 }
@@ -126,15 +141,15 @@ func (r *Rclone) Sync(ctx context.Context, cs CircleState, key model.CircleKey, 
 	var args []string
 	switch mode {
 	case "pull":
-		args = append([]string{"sync", "C:", local, "--backup-dir", filepath.Join(local, VersionsDir)}, common...)
+		args = append([]string{"sync", cryptRemote, local, "--backup-dir", filepath.Join(local, VersionsDir)}, common...)
 	case "push":
-		args = append([]string{"sync", local, "C:", "--backup-dir", "C:" + VersionsDir}, common...)
+		args = append([]string{"sync", local, cryptRemote, "--backup-dir", cryptRemote + VersionsDir}, common...)
 	default: // bisync (FR-30/33)
 		work := filepath.Join(BisyncDir(), cs.Slug)
 		_ = os.MkdirAll(work, 0o700)
-		args = append([]string{"bisync", local, "C:", "--workdir", work, "--resilient", "--recover", "--max-lock", "2m",
+		args = append([]string{"bisync", local, cryptRemote, "--workdir", work, "--resilient", "--recover", "--max-lock", "2m",
 			"--conflict-resolve", "newer", "--conflict-loser", "delete", "--conflict-suffix", "qpconflict",
-			"--backup-dir1", filepath.Join(local, VersionsDir), "--backup-dir2", "C:" + VersionsDir,
+			"--backup-dir1", filepath.Join(local, VersionsDir), "--backup-dir2", cryptRemote + VersionsDir,
 			"--max-delete", "100", "--create-empty-src-dirs", "--compare", "size,modtime"}, common...)
 		if resync {
 			args = append(args, "--resync")
@@ -180,7 +195,7 @@ func (r *Rclone) PruneVersions(ctx context.Context, cs CircleState, key model.Ci
 	}
 	age := fmt.Sprintf("%dd", days)
 	local := filepath.Join(CircleDir(cs.DisplayName), VersionsDir)
-	for _, target := range []string{local, "C:" + VersionsDir} {
+	for _, target := range []string{local, cryptRemote + VersionsDir} {
 		cmd := exec.CommandContext(ctx, r.bin, "delete", target, "--min-age", age, "--rmdirs", "-q")
 		cmd.Env = r.env(cs, key, ak, sk, endpoint)
 		hideWindow(cmd)
@@ -191,7 +206,7 @@ func (r *Rclone) PruneVersions(ctx context.Context, cs CircleState, key model.Ci
 
 // RemoteTooLong lists remote files whose decrypted local path would exceed the platform limit (FR-40).
 func (r *Rclone) RemoteTooLong(ctx context.Context, cs CircleState, key model.CircleKey, ak, sk, endpoint string) ([]string, error) {
-	cmd := exec.CommandContext(ctx, r.bin, "lsf", "-R", "--files-only", "C:")
+	cmd := exec.CommandContext(ctx, r.bin, "lsf", "-R", "--files-only", cryptRemote)
 	cmd.Env = r.env(cs, key, ak, sk, endpoint)
 	hideWindow(cmd)
 	out, err := cmd.Output()
