@@ -83,7 +83,7 @@ swap binaries, restart, roll back after 2 failed starts.
 A hidden file the agent keeps in every folder so rclone bisync never sees an empty listing.
 
 **Installer**:
-`cmd/qp-installer`: the Mac app in a notarized DMG, the single Windows exe, the Linux binary. The client is embedded;
+`cmd/qp-installer`: the Mac app in a notarized DMG, the single Windows exe (downloaded inside a zip), the Linux binary. The client is embedded;
 the invite code comes from the file name, the app folder name, or a pasted link. It also removes an install.
 
 **Mesh** / **tailnet**:

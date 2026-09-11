@@ -90,7 +90,9 @@ func (h *Hub) routesPublic(mux *http.ServeMux) {
 		f := r.PathValue("file")
 		switch {
 		case strings.HasPrefix(f, "Quietport-") && strings.HasSuffix(f, ".exe"):
-			h.inviteInstallerWin(w, r)
+			h.inviteInstallerWin(w, r, false)
+		case strings.HasPrefix(f, "Quietport-") && strings.HasSuffix(f, ".zip"):
+			h.inviteInstallerWin(w, r, true)
 		case strings.HasPrefix(f, "Quietport-") && strings.HasSuffix(f, ".dmg"):
 			h.inviteInstallerDMG(w, r)
 		default:
@@ -268,6 +270,9 @@ func (h *Hub) download(w http.ResponseWriter, r *http.Request) {
 	case "Quietport.exe":
 		w.Header().Set("Content-Disposition", `attachment; filename="Quietport.exe"`)
 		name = "quietport-installer-windows-amd64.exe"
+	case "Quietport-Windows.zip":
+		h.serveWinZip(w, r, "Quietport.exe", name)
+		return
 	case "Quietport-linux-amd64", "Quietport-linux-arm64":
 		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 		name = "quietport-installer-linux-" + strings.TrimPrefix(name, "Quietport-linux-")

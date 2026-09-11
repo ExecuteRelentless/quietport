@@ -155,7 +155,8 @@ operator's Mac. Without it the backup is ciphertext.
   so the only thing it fetches from the hub is the invite payload. It reads the invite code from the disk image's file
   name (via `hdiutil info`) or from the app folder name, and asks for the link if neither carries one.
 - Windows: `Quietport-<code>.exe`, the same installer with the client zip embedded (`go:embed`), no console window,
-  MessageBox dialogs. Unsigned (no Windows certificate): SmartScreen shows More info / Run anyway once.
+  MessageBox dialogs. Members download it inside `Quietport-<code>.zip`, which the hub builds on each request (ADR
+  0008). The bare `.exe` URL still works. Unsigned (no Windows certificate): SmartScreen shows More info / Run anyway once.
 - Linux (best effort): `quietport-installer-linux-<arch>`, client tarball embedded, prompts in the terminal, installs a
   systemd user unit. Run it as `./Quietport-linux-amd64` (no invite in the name: it asks for the link or offers to start a folder).
 - Both still fall back to downloading the client bundle from `/dl/` if a build ships without the embedded files.
@@ -205,6 +206,9 @@ Two things finish the job, both outside this repo:
 2. **False-positive report to Microsoft.** https://www.microsoft.com/en-us/wdsi/filesubmission (sign in with a
    Microsoft account, "Software developer", upload the exe). Detections on clean files are usually lifted within 1 to
    3 days and the cleared hash stops being flagged for everyone.
+
+Since 2026-09-10 the invite page and the site hand out the exe inside a zip (ADR 0008). That keeps a bare exe from
+landing in Downloads, but it is not a fix either: Defender scans archives and scans the exe again when it runs.
 
 Until then, a member on Windows can use the paste-a-line path from the invite page's "Other options" (PowerShell
 `irm … | iex`), which is not subject to the file download checks, or restore the file from Defender's quarantine and
