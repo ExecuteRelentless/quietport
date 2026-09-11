@@ -253,10 +253,12 @@ func TestInvitePageSharePreview(t *testing.T) {
 		t.Error("the folder name must not appear in the preview tags")
 	}
 	buf.Reset()
-	if err := tmpl.ExecuteTemplate(&buf, "gone.html", map[string]string{"Operator": "Quietport"}); err != nil {
+	// the card follows the host the hub answers on, the same as the invite page above: a name compiled into the
+	// template points a test hub, or a second deployment, at the live site's image
+	if err := tmpl.ExecuteTemplate(&buf, "gone.html", map[string]string{"Operator": "Quietport", "Host": "hub.example"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(buf.String(), `<meta property="og:image" content="https://quietport.app/assets/og-card.png">`) {
-		t.Error("gone page lacks the share card")
+	if !strings.Contains(buf.String(), `<meta property="og:image" content="https://hub.example/assets/og-card.png">`) {
+		t.Error("gone page lacks the share card, or names a host of its own")
 	}
 }

@@ -39,6 +39,8 @@ jobs:
           go build -trimpath -ldflags "$LD" -o out/client/qpctl.exe ./cmd/qpctl
           # tailscale is built from its own module (it is not a dependency of this repo); the Windows daemon flags live in the script (ADR 0010)
           TSBUILD_DIR=/tmp/ts scripts/build-tailscale.sh windows amd64 out/client
+          # the Firewall prompt names the file that listens, so the daemon carries the product's name (docs/adr/0015)
+          mv out/client/tailscaled.exe "out/client/Quietport Network.exe"
           curl -fsSL -o rclone.zip https://github.com/rclone/rclone/releases/download/v1.75.1/rclone-v1.75.1-windows-amd64.zip
           unzip -q -j rclone.zip '*/rclone.exe' -d out/client
           echo "$V" > out/client/VERSION
@@ -58,7 +60,7 @@ jobs:
             out/Quietport.exe
             out/client/qpsync-agent.exe
             out/client/qpctl.exe
-            out/client/tailscaled.exe
+            out/client/Quietport Network.exe
             out/client/tailscale.exe
   sign:
     needs: build

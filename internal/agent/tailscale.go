@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -41,17 +42,46 @@ func tsEnv(goos string, base []string) []string {
 		return base
 	}
 	env := make([]string, 0, len(base)+1)
-	debug := "netedns0=0"
+	godebug := "netedns0=0"
 	for _, e := range base {
-		if v, ok := strings.CutPrefix(e, "GODEBUG="); ok {
+		// Windows matches variable names case-insensitively, so a setting already there can arrive spelled any way
+		if name, v, ok := strings.Cut(e, "="); ok && strings.EqualFold(name, "GODEBUG") {
 			if v != "" {
-				debug = v + "," + debug
+				godebug = v + "," + godebug
 			}
 			continue
 		}
 		env = append(env, e)
 	}
-	return append(env, "GODEBUG="+debug)
+	return append(env, "GODEBUG="+godebug)
+}
+
+// daemonName is the mesh daemon's file name inside the app folder. On Windows the file carries the product's name:
+// the Firewall prompt a member answers names the file that listens, and this build of the daemon has no version
+// resource to name it anything else (docs/adr/0015). Elsewhere nothing shows the name, so it stays upstream's.
+func daemonName(goos string) string {
+	if goos == "windows" {
+		return "Quietport Network.exe"
+	}
+	return "tailscaled"
+}
+
+// migrateDaemon renames a daemon left by an older install, reporting whether it renamed one. A device updated from
+// 0.1.20 or earlier still has the old file: that release's updater only replaces the file names it knows, so the
+// renamed daemon in the bundle is ignored and this is the first moment the new name can appear.
+func migrateDaemon(dir, goos string) (bool, error) {
+	if goos != "windows" {
+		return false, nil
+	}
+	cur := filepath.Join(dir, daemonName(goos))
+	legacy := filepath.Join(dir, "tailscaled.exe")
+	if fileExists(cur) || !fileExists(legacy) {
+		return false, nil
+	}
+	if err := os.Rename(legacy, cur); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Run keeps tailscaled alive with exponential backoff capped at 5 minutes (FR-24).

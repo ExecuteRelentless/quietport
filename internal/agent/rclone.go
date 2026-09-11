@@ -39,8 +39,9 @@ func cryptName(goos string) string {
 }
 
 var (
-	cryptRemote = cryptName(runtime.GOOS) + ":"                                     // path prefix: "C:" or "QPCRYPT:"
-	cryptEnv    = "RCLONE_CONFIG_" + strings.ToUpper(cryptName(runtime.GOOS)) + "_" // its environment prefix
+	cryptRemoteName = cryptName(runtime.GOOS)
+	cryptRemote     = cryptRemoteName + ":"                                     // path prefix: "C:" or "QPCRYPT:"
+	cryptEnvPrefix  = "RCLONE_CONFIG_" + strings.ToUpper(cryptRemoteName) + "_" // the prefix of its every setting
 )
 
 func (r *Rclone) env(cs CircleState, key model.CircleKey, ak, sk, endpoint string) []string {
@@ -64,8 +65,8 @@ func (r *Rclone) env(cs CircleState, key model.CircleKey, ak, sk, endpoint strin
 		"RCLONE_CONFIG_S3_ENDPOINT="+endpoint, "RCLONE_CONFIG_S3_REGION=garage", "RCLONE_CONFIG_S3_FORCE_PATH_STYLE=true",
 		"RCLONE_CONFIG_S3_CHUNK_SIZE=64M", "RCLONE_CONFIG_S3_UPLOAD_CONCURRENCY=2", "RCLONE_CONFIG_S3_LEAVE_PARTS_ON_ERROR=true", // FR-36
 		"RCLONE_CONFIG_S3_NO_CHECK_BUCKET=true",
-		cryptEnv+"TYPE=crypt", cryptEnv+"REMOTE=s3:"+cs.Bucket+"/g"+strconv.Itoa(cs.Generation), cryptEnv+"FILENAME_ENCRYPTION=standard",
-		cryptEnv+"DIRECTORY_NAME_ENCRYPTION=true", cryptEnv+"PASSWORD="+obs(key.Password), cryptEnv+"PASSWORD2="+obs(key.Salt),
+		cryptEnvPrefix+"TYPE=crypt", cryptEnvPrefix+"REMOTE=s3:"+cs.Bucket+"/g"+strconv.Itoa(cs.Generation), cryptEnvPrefix+"FILENAME_ENCRYPTION=standard",
+		cryptEnvPrefix+"DIRECTORY_NAME_ENCRYPTION=true", cryptEnvPrefix+"PASSWORD="+obs(key.Password), cryptEnvPrefix+"PASSWORD2="+obs(key.Salt),
 		"RCLONE_CONFIG_DIR="+filepath.Join(AppDir(), "rclone-nocfg"), "RCLONE_CONFIG=/dev/null",
 	)
 }

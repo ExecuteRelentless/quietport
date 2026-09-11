@@ -44,11 +44,21 @@ func newLogger() *log.Logger {
 func (a *Agent) logf(format string, args ...any) { a.logger.Printf(format, args...) }
 
 // Run is the main loop: tailscaled supervision, sync scheduler, heartbeat, versions pruning, disk watch.
+// workFromAppDir makes the app folder this process's working directory, creating it if it is not there. Task
+// Scheduler starts the agent in C:\Windows\System32 and launchd in /, and from there a bare name in an rclone
+// argument resolves inside that folder, which is how a member's folder came to be synced with System32
+// (docs/adr/0013).
+func workFromAppDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	return os.Chdir(dir)
+}
+
 func Run(ctx context.Context) error {
-	// Task Scheduler starts the agent in C:\Windows\System32 and launchd in /; work from the app folder so that no
-	// relative path can ever resolve to one of those (docs/adr/0013)
-	_ = os.MkdirAll(AppDir(), 0o700)
-	_ = os.Chdir(AppDir())
+	if err := workFromAppDir(AppDir()); err != nil {
+		return err
+	}
 	store, err := OpenStore()
 	if err != nil {
 		return err
@@ -67,6 +77,14 @@ func Run(ctx context.Context) error {
 
 	if err := a.checkUpdateBoot(); err != nil {
 		a.logf("update boot check: %v", err)
+	}
+	if moved, err := migrateDaemon(AppDir(), runtime.GOOS); err != nil {
+		a.logf("renaming the daemon from the previous version: %v", err)
+	} else if moved {
+		a.logf("renamed the daemon from the previous version to %s", daemonName(runtime.GOOS))
+	}
+	if n := stopLeftoverDaemons(AppDir()); n > 0 {
+		a.logf("stopped %d mesh daemon(s) left running by the previous version", n)
 	}
 
 	go a.ts.Run(ctx, a.logf)

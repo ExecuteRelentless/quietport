@@ -79,7 +79,12 @@ func main() {
 	if host == "" {
 		host = DefaultHost
 	}
-	if !confirm("Quietport will set up your shared folder now. It takes about a minute and needs no password.") {
+	msg := "Quietport will set up your shared folder now. It takes about a minute and needs no password."
+	if runtime.GOOS == "windows" {
+		// the Firewall asks about the daemon the first time it starts; Quietport works either way (docs/adr/0015)
+		msg += " If Windows asks about network access, either answer is fine."
+	}
+	if !confirm(msg) {
 		os.Exit(0)
 	}
 	support := ""

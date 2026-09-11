@@ -58,7 +58,7 @@ func exe(name string) string {
 
 func AgentBin() string      { return filepath.Join(AppDir(), exe("qpsync-agent")) }
 func RcloneBin() string     { return filepath.Join(AppDir(), exe("rclone")) }
-func TailscaledBin() string { return filepath.Join(AppDir(), exe("tailscaled")) }
+func TailscaledBin() string { return filepath.Join(AppDir(), daemonName(runtime.GOOS)) }
 func TailscaleBin() string  { return filepath.Join(AppDir(), exe("tailscale")) }
 
 // TSSocket: macOS unix sockets are limited to 104 bytes of path, so keep it short; Windows uses a private named pipe

@@ -182,7 +182,7 @@ func (h *Hub) invitePlain(w http.ResponseWriter, kind string) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(404)
-	_ = tmpl.ExecuteTemplate(w, "gone.html", map[string]string{"Operator": h.cfg.OperatorName})
+	_ = tmpl.ExecuteTemplate(w, "gone.html", map[string]string{"Operator": h.cfg.OperatorName, "Host": h.cfg.Host})
 }
 
 // inviteScript serves the personalised installer (FR-13). It does not consume the code; the payload fetch does.

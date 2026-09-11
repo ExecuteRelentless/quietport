@@ -80,9 +80,9 @@ func (a *Agent) checkUpdateBoot() error {
 
 func bundleFiles() []string {
 	if runtime.GOOS == "windows" {
-		return []string{"qpsync-agent.exe", "rclone.exe", "tailscaled.exe", "tailscale.exe"}
+		return []string{"qpsync-agent.exe", "rclone.exe", daemonName("windows"), "tailscale.exe"}
 	}
-	return []string{"qpsync-agent", "rclone", "tailscaled", "tailscale"}
+	return []string{"qpsync-agent", "rclone", daemonName(runtime.GOOS), "tailscale"}
 }
 
 func (a *Agent) rollback(s updateState) error {

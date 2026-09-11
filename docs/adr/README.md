@@ -17,3 +17,5 @@ A decision is superseded by adding a new record, never by editing the old one.
 - [0012 Every install starts with a new mesh identity](0012-install-starts-with-new-mesh-identity.md)
 - [0013 The crypt remote is never a drive letter, and the agent works from its own folder](0013-crypt-remote-never-a-drive-letter.md)
 - [0014 On Windows tailscaled sends DNS queries without EDNS](0014-windows-tailscaled-dns-without-edns.md)
+- [0015 On Windows the mesh daemon's file carries the product's name](0015-windows-daemon-carries-the-product-name.md)
+- [0016 A reinstall sets aside what it finds in a member's folder](0016-reinstall-sets-aside-existing-files.md)

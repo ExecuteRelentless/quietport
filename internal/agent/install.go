@@ -44,18 +44,35 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 		return errors.New("a device key could not be generated.")
 	}
 	port := FreePort()
-	if old := store.Config(); old.SocksPort != 0 {
+	old := store.Config()
+	if old.SocksPort != 0 {
 		port = old.SocksPort
 		stopRunningAgent()
 	}
+	ilog := newLogger()
+	// an install continuing this computer's own device keeps its folders: they are the synced copy. Anything else
+	// found in a folder of the right name was put there by something this install knows nothing of (docs/adr/0016)
+	keepFolders := old.DeviceID != 0
 	// an earlier install on this account, finished or not, left its mesh identity behind; reusing it re-registers the old
 	// node key, which the hub still holds for that attempt, and the hub then drops this device's traffic (docs/adr/0012)
 	if err := resetMeshState(TSDir()); err != nil {
 		return errors.New("the previous network settings on this computer could not be cleared.")
 	}
 	_ = os.MkdirAll(SyncRoot(), 0o755)
+	asideRoot := filepath.Join(SyncRoot(), "Previous files "+time.Now().Format("2006-01-02"))
+	makeFolder := func(dir string) {
+		_ = os.MkdirAll(dir, 0o755) // FR-15
+		if keepFolders {
+			return
+		}
+		if n, err := setAside(dir, filepath.Join(asideRoot, filepath.Base(dir))); err != nil {
+			ilog.Printf("install: could not set aside what was already in %s: %v", dir, err)
+		} else if n > 0 {
+			ilog.Printf("install: moved %d entries out of %s into %s", n, dir, asideRoot)
+		}
+	}
 	for _, name := range p.Circles {
-		_ = os.MkdirAll(CircleDir(name), 0o755) // FR-15
+		makeFolder(CircleDir(name))
 	}
 	sealedKeys, _ := store.Seal(dk)
 	sealedPak, _ := store.Seal(p.PreAuthKey)
@@ -92,7 +109,6 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 	ts := NewTS(port)
 	tctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	ilog := newLogger()
 	ilog.Printf("install %s on %s/%s: starting tailscaled", Version, runtime.GOOS, runtime.GOARCH)
 	go ts.Run(tctx, ilog.Printf)
 	if err := ts.WaitReady(tctx, 30*time.Second); err != nil {
@@ -136,7 +152,7 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 	a := &Agent{store: store, ts: ts, logger: newLogger(), st: LoadState(), hub: hub}
 	a.applyBundle(tctx, enr.Config)
 	for _, c := range store.Config().Circles {
-		_ = os.MkdirAll(CircleDir(c.DisplayName), 0o755)
+		makeFolder(CircleDir(c.DisplayName))
 	}
 	cancel() // the background agent owns tailscaled from here
 	time.Sleep(500 * time.Millisecond)
@@ -164,6 +180,39 @@ func resetMeshState(dir string) error {
 		time.Sleep(time.Second)
 	}
 	return err
+}
+
+// setAside moves what a member already has in a folder into asideDir, and reports how many entries it moved.
+// Quietport's own files (the marker, the versions folder) stay where they are: they are not the member's content,
+// and moving them would make every install look like a first one.
+func setAside(dir, asideDir string) (int, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	var move []string
+	for _, e := range entries {
+		if e.Name() != MarkerFile && e.Name() != VersionsDir {
+			move = append(move, e.Name())
+		}
+	}
+	if len(move) == 0 {
+		return 0, nil
+	}
+	if err := os.MkdirAll(asideDir, 0o755); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, name := range move {
+		if err := os.Rename(filepath.Join(dir, name), filepath.Join(asideDir, name)); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 func writeHelpers() {
@@ -288,8 +337,7 @@ func stopRunningAgent() {
 		_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
 	case "windows":
 		_ = exec.Command("schtasks", "/End", "/TN", "Quietport").Run()
-		_ = exec.Command("taskkill", "/IM", "qpsync-agent.exe", "/F").Run()
-		_ = exec.Command("taskkill", "/IM", "tailscaled.exe", "/F").Run()
+		stopOwnProcesses(AppDir())
 	default:
 		_ = exec.Command("systemctl", "--user", "stop", "quietport.service").Run()
 	}
@@ -398,7 +446,7 @@ func UninstallSelf(ts *TS, removeFolder bool) {
 		_ = os.RemoveAll(SyncRoot())
 	}
 	if runtime.GOOS == "windows" {
-		_ = exec.Command("taskkill", "/IM", "tailscaled.exe", "/F").Run()
+		stopOwnProcesses(AppDir()) // the daemon, not this process: the removal below still has work to do
 		cmd := exec.Command("cmd", "/c", "ping 127.0.0.1 -n 3 >nul & rmdir /s /q \""+AppDir()+"\"")
 		hideWindow(cmd)
 		_ = cmd.Start()

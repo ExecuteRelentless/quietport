@@ -44,7 +44,9 @@ for t in "darwin arm64 osx-arm64" "darwin amd64 osx-amd64" "windows amd64 window
   build $os $arch "$D"
   ext=""; [ "$os" = windows ] && ext=.exe
   cp "$VB/rclone/rclone-$RCLONE_VER-$rcl/rclone$ext" "$D/"
-  cp "$VB/ts-$os-$arch/tailscaled$ext" "$VB/ts-$os-$arch/tailscale$ext" "$D/"
+  cp "$VB/ts-$os-$arch/tailscale$ext" "$D/"
+  # the Windows Firewall prompt names the file that listens, so there the daemon carries the product's name (docs/adr/0015)
+  if [ "$os" = windows ]; then cp "$VB/ts-$os-$arch/tailscaled.exe" "$D/Quietport Network.exe"; else cp "$VB/ts-$os-$arch/tailscaled" "$D/"; fi
   if [ "$os" = darwin ]; then cp "$R/installers/mac/qp-sidebar" "$D/"; fi
   chmod 755 "$D"/*
   echo "$V" > "$D/VERSION"
