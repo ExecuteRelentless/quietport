@@ -90,6 +90,11 @@ the invite code comes from the file name, the app folder name, or a pasted link.
 The Headscale-controlled WireGuard network. The hub is `100.64.0.1`, tagged `tag:hub`; every device runs userspace
 tailscaled with a local SOCKS5 proxy that rclone and the agent use.
 
+**Mesh daemon**:
+The userspace tailscaled every device runs. On Windows the file is named `Quietport Network.exe`: the Firewall prompt
+a member answers names the file that listens, and that is the only place the name is ever seen.
+_Avoid_: tailscaled in anything a member reads
+
 **Mesh identity**:
 The keys that identify one device on the mesh. Every install creates a new one, so a new install never inherits an
 earlier attempt's.
