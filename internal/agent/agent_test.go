@@ -149,3 +149,27 @@ func TestCryptRemoteIsNotADriveLetter(t *testing.T) {
 		}
 	}
 }
+
+// tailscaled resolves the control server with Go's own DNS client on Windows, and Go adds an EDNS0 record to every
+// query. Some DNS forwarders mangle the reply to such a query (VMware Fusion's NAT DNS on macOS returns a malformed
+// packet), so the lookup failed, `tailscale up` hung until the agent's timeout and the install failed, while Windows'
+// own resolver, which the installer uses, worked (docs/adr/0014). On Windows tailscaled runs with GODEBUG=netedns0=0.
+func TestTailscaledEnvDisablesEDNSOnWindows(t *testing.T) {
+	get := func(env []string) string {
+		for _, e := range env {
+			if strings.HasPrefix(e, "GODEBUG=") {
+				return strings.TrimPrefix(e, "GODEBUG=")
+			}
+		}
+		return ""
+	}
+	if g := get(tsEnv("windows", []string{"PATH=x"})); g != "netedns0=0" {
+		t.Fatalf("windows: GODEBUG=%q, want netedns0=0", g)
+	}
+	if g := get(tsEnv("windows", []string{"GODEBUG=http2client=0", "PATH=x"})); g != "http2client=0,netedns0=0" {
+		t.Fatalf("windows with an existing GODEBUG: %q, want it kept and netedns0=0 added", g)
+	}
+	if g := get(tsEnv("darwin", []string{"PATH=x"})); g != "" {
+		t.Fatalf("darwin: GODEBUG=%q, want none (tailscaled uses the system resolver there)", g)
+	}
+}

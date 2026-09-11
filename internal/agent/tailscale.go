@@ -34,6 +34,26 @@ func (t *TS) Args() []string {
 	return args
 }
 
+// tsEnv is the environment tailscaled runs with. On Windows it resolves names with Go's own DNS client, whose EDNS0
+// record some DNS forwarders mangle (VMware Fusion's NAT DNS among them), so EDNS is turned off there (docs/adr/0014).
+func tsEnv(goos string, base []string) []string {
+	if goos != "windows" {
+		return base
+	}
+	env := make([]string, 0, len(base)+1)
+	debug := "netedns0=0"
+	for _, e := range base {
+		if v, ok := strings.CutPrefix(e, "GODEBUG="); ok {
+			if v != "" {
+				debug = v + "," + debug
+			}
+			continue
+		}
+		env = append(env, e)
+	}
+	return append(env, "GODEBUG="+debug)
+}
+
 // Run keeps tailscaled alive with exponential backoff capped at 5 minutes (FR-24).
 func (t *TS) Run(ctx context.Context, logf func(string, ...any)) {
 	_ = os.MkdirAll(TSDir(), 0o700)
@@ -41,6 +61,7 @@ func (t *TS) Run(ctx context.Context, logf func(string, ...any)) {
 	for ctx.Err() == nil {
 		started := time.Now()
 		cmd := exec.CommandContext(ctx, TailscaledBin(), t.Args()...)
+		cmd.Env = tsEnv(runtime.GOOS, os.Environ())
 		cmd.Stdout, cmd.Stderr = tsLogWriter{logf}, tsLogWriter{logf}
 		hideWindow(cmd)
 		t.mu.Lock()
