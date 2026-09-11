@@ -5,7 +5,7 @@ encrypted before they leave the computer, and only the people in that folder hol
 log into, no interface to learn, and the server never has a key.
 
 This repository holds the whole system: the hub that runs on one small Linux VM, the operator CLI, the member client,
-the installers and the public site. MIT licensed. Current release: 0.1.14.
+the installers and the public site. MIT licensed. Current release: 0.1.15.
 
 ## How it works
 

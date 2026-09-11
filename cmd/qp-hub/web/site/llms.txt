@@ -1,0 +1,49 @@
+# Quietport
+
+> Quietport is a private shared folder for Mac, Windows and Linux. Files and their names are encrypted on your computer before they leave it, and the server stores only ciphertext and never holds a key. There are no accounts: an invite link that works once, or a folder you start yourself, is the whole setup. Free and open source under the MIT licence.
+
+Quietport puts a folder called QPSync on each member's computer, pinned in the Finder sidebar on a Mac and shown in File Explorer on Windows. Each shared folder (a "circle") has its own key, and that key exists only on the computers of the people in it. The hub that stores the encrypted files cannot open them, and a copy of the hub gives an attacker nothing to read.
+
+## How it works
+
+- Install: download Quietport for Mac (a notarized disk image, macOS 12 or later, Apple silicon and Intel) or for Windows (a zip holding the installer, Windows 10 and 11), open it and click Continue. There is no sign-up, no password and no administrator prompt. On Linux the installer runs in a terminal.
+- Join or start: open the invite link a friend sent, or start a folder of your own from the installer.
+- Invite: open Share a folder inside QPSync, pick the folder, type the other person's name and send the link. A link works once and expires after 24 hours. Anyone in a folder can invite people. Only the owner can remove them.
+- Remove a person or a lost laptop: the owner removes that computer and the folder gets a new key, so nothing new reaches it. Files it already had stay on it.
+- Sync: changes sync both ways every minute, with 30 days of version history per folder. Files can be up to 10 GB each, and interrupted transfers pick up where they left off. Members do not need to be online at the same time, because the hub keeps the encrypted copy.
+
+## Security design
+
+- Encryption is rclone's crypt backend (XSalsa20-Poly1305 for content, encrypted file names), run on the member's computer. There is no home-made cryptography.
+- Devices reach the hub over a private WireGuard network: a Headscale control server, with a userspace Tailscale client built into Quietport.
+- Storage is Garage, an S3-compatible object store reachable only on that private network. Each folder is its own bucket with a size quota.
+- The hub sees how much encrypted data each folder holds and a device check-in every 5 minutes (sync times, errors, free disk space), kept for 7 days. No email address is collected.
+- There is no key escrow. If every copy of a folder's key is lost, its files on the hub cannot be recovered.
+
+## Compared with other services
+
+Dropbox, Google Drive and iCloud hold the keys to what you store, so their servers can read it. Quietport's server holds encrypted files with encrypted names and never a key. Quietport has no accounts and can run on your own small server.
+
+## Limits
+
+There is no phone or Chromebook app yet, and no web viewer. The Windows installer is not code-signed yet, so Windows SmartScreen asks once before it runs.
+
+## Run your own hub
+
+A small Linux server (arm64 or x86) is enough, and setup takes about 15 minutes. The hub, the operator tools and signed checksums are linked from the download section of the home page.
+
+## Docs
+
+- [Home page](https://quietport.app/): what it does, the 4 steps, downloads and questions
+- [Privacy](https://quietport.app/privacy): what the hub stores and what it cannot see
+- [Source code](https://github.com/ExecuteRelentless/quietport): hub, client, installers and site, written in Go
+- [README](https://github.com/ExecuteRelentless/quietport/blob/main/README.md): architecture and repository layout
+- [Operator runbook](https://github.com/ExecuteRelentless/quietport/blob/main/docs/RUNBOOK.md): running a hub, releases, backups and support
+- [Design decisions](https://github.com/ExecuteRelentless/quietport/tree/main/docs/adr): why invites are links and not accounts, why keys never touch the hub, why there is no web viewer
+
+## Downloads
+
+- [Mac](https://quietport.app/dl/Quietport.dmg)
+- [Windows](https://quietport.app/dl/Quietport-Windows.zip)
+- [Linux x86](https://quietport.app/dl/Quietport-linux-amd64)
+- [Linux arm64](https://quietport.app/dl/Quietport-linux-arm64)

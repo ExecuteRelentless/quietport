@@ -1,0 +1,34 @@
+# quietport.app welcomes search engines and AI assistants (docs/adr/0009 in the source).
+# Invite links (/j/) are private and downloads (/dl/) are files, so both stay out.
+
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+Allow: /
+Disallow: /j/
+Disallow: /dl/
+
+# AI crawlers, named so the permission is explicit. A crawler that matches a named group ignores the * group,
+# so the same lines repeat here.
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: anthropic-ai
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: CCBot
+User-agent: meta-externalagent
+User-agent: Amazonbot
+User-agent: DuckAssistBot
+User-agent: MistralAI-User
+User-agent: cohere-ai
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+Allow: /
+Disallow: /j/
+Disallow: /dl/
+
+Sitemap: https://quietport.app/sitemap.xml

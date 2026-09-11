@@ -207,8 +207,8 @@ Two things finish the job, both outside this repo:
    Microsoft account, "Software developer", upload the exe). Detections on clean files are usually lifted within 1 to
    3 days and the cleared hash stops being flagged for everyone.
 
-Since 2026-09-10 the invite page and the site hand out the exe inside a zip (ADR 0008). That keeps a bare exe from
-landing in Downloads, but it is not a fix either: Defender scans archives and scans the exe again when it runs.
+Since 2026-09-10 the invite page and the site hand out the exe inside a zip (ADR 0008). That keeps a bare exe out of
+the Downloads folder, but it is not a fix either: Defender scans archives and scans the exe again when it runs.
 
 Until then, a member on Windows can use the paste-a-line path from the invite page's "Other options" (PowerShell
 `irm … | iex`), which is not subject to the file download checks, or restore the file from Defender's quarantine and

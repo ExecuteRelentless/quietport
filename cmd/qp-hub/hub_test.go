@@ -3,7 +3,9 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -149,6 +151,71 @@ func TestWindowsInstallerZip(t *testing.T) {
 		if head.Header().Get("Content-Length") != strconv.Itoa(len(body)) || head.Body.Len() != 0 {
 			t.Fatalf("%s HEAD: Content-Length %q, body %d bytes", path, head.Header().Get("Content-Length"), head.Body.Len())
 		}
+	}
+}
+
+// Search engines and AI crawlers are let in (docs/adr/0009). Before the site had its own robots.txt the request fell
+// through to Headscale, whose robots.txt disallows everything, so quietport.app was invisible to all of them.
+func TestCrawlerFiles(t *testing.T) {
+	site, err := fs.Sub(webFS, "web/site")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	(&Hub{site: site}).routesPublic(mux)
+	get := func(path string) string {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != 200 {
+			t.Fatalf("%s: %d", path, rec.Code)
+		}
+		return rec.Body.String()
+	}
+
+	robots := get("/robots.txt")
+	for _, want := range []string{"User-agent: *", "User-agent: GPTBot", "User-agent: OAI-SearchBot", "User-agent: ClaudeBot",
+		"User-agent: PerplexityBot", "User-agent: Google-Extended", "User-agent: CCBot", "Sitemap: https://quietport.app/sitemap.xml"} {
+		if !strings.Contains(robots, want) {
+			t.Errorf("robots.txt lacks %q", want)
+		}
+	}
+	for _, line := range strings.Split(robots, "\n") {
+		if strings.TrimSpace(line) == "Disallow: /" {
+			t.Fatal("robots.txt disallows the whole site")
+		}
+	}
+	// a crawler that matches a named group ignores the * group, so every group must repeat the private paths
+	if groups, private := strings.Count(robots, "Allow: /\n"), strings.Count(robots, "Disallow: /j/\n"); groups < 2 || private != groups {
+		t.Errorf("robots.txt: %d groups, %d keep /j/ out", groups, private)
+	}
+
+	sitemap := get("/sitemap.xml")
+	for _, loc := range []string{"https://quietport.app/", "https://quietport.app/privacy"} {
+		if !strings.Contains(sitemap, "<loc>"+loc+"</loc>") {
+			t.Errorf("sitemap.xml lacks %s", loc)
+		}
+	}
+	if llms := get("/llms.txt"); !strings.HasPrefix(llms, "# Quietport\n") || !strings.Contains(llms, "\n> ") ||
+		!strings.Contains(llms, "https://github.com/ExecuteRelentless/quietport") {
+		t.Error("llms.txt is not in the llmstxt.org shape (title, summary, links)")
+	}
+	if key := strings.TrimSpace(get("/a89e84bee4b5d7d0521a8993f76f94e1.txt")); key != "a89e84bee4b5d7d0521a8993f76f94e1" {
+		t.Errorf("IndexNow key file holds %q", key)
+	}
+	get("/assets/og-card.png")
+
+	home := get("/")
+	for _, want := range []string{`<link rel="canonical" href="https://quietport.app/">`,
+		`<meta property="og:image" content="https://quietport.app/assets/og-card.png">`, `<meta name="twitter:card" content="summary_large_image">`} {
+		if !strings.Contains(home, want) {
+			t.Errorf("home page lacks %s", want)
+		}
+	}
+	_, ld, ok := strings.Cut(home, `<script type="application/ld+json">`)
+	ld, _, _ = strings.Cut(ld, "</script>")
+	var app struct{ Name, URL string }
+	if err := json.Unmarshal([]byte(ld), &app); !ok || err != nil || app.Name != "Quietport" || app.URL != "https://quietport.app/" {
+		t.Errorf("home page JSON-LD: found=%v err=%v %+v", ok, err, app)
 	}
 }
 
