@@ -92,15 +92,24 @@ func (t *TS) cli(ctx context.Context, args ...string) ([]byte, error) {
 // Up logs in with a pre-auth key (install / re-provision). The key never appears in the returned error.
 func (t *TS) Up(ctx context.Context, loginServer, authKey string) error {
 	host, _ := os.Hostname()
-	args := []string{"up", "--reset", "--login-server=" + loginServer, "--accept-dns=false", "--accept-routes=false", "--hostname=" + tsHostname(host)}
-	if authKey != "" {
-		args = append(args, "--auth-key="+authKey)
-	}
-	_, err := t.cli(ctx, args...)
+	_, err := t.cli(ctx, upArgs(runtime.GOOS, loginServer, authKey, host)...)
 	if err != nil && authKey != "" {
 		return errors.New(strings.ReplaceAll(err.Error(), authKey, "[auth-key]"))
 	}
 	return err
+}
+
+// upArgs is the `tailscale up` command line for one platform.
+func upArgs(goos, loginServer, authKey, host string) []string {
+	args := []string{"up", "--reset", "--login-server=" + loginServer, "--accept-dns=false", "--accept-routes=false", "--hostname=" + tsHostname(host)}
+	if authKey != "" {
+		args = append(args, "--auth-key="+authKey)
+	}
+	if goos == "windows" {
+		// keep the profile when no client is connected, and log back in after a restart (docs/adr/0011)
+		args = append(args, "--unattended")
+	}
+	return args
 }
 
 // WaitReady waits for tailscaled to answer on its socket in any state, logged in or not (docs/adr/0010).

@@ -94,3 +94,25 @@ func TestWaitForDaemon(t *testing.T) {
 		t.Fatal("cancelled context: want an error, got nil")
 	}
 }
+
+// On Windows tailscaled drops its profile and goes idle whenever no client is connected to its pipe, unless it runs
+// in Unattended Mode (docs/adr/0011). The agent only connects for a moment per status call, so without the flag the
+// SOCKS proxy is dead between calls and nothing logs back in after a restart. Other platforms have no such mode.
+func TestUpArgsUnattendedOnWindows(t *testing.T) {
+	has := func(args []string, flag string) bool {
+		for _, a := range args {
+			if a == flag {
+				return true
+			}
+		}
+		return false
+	}
+	if args := upArgs("windows", "https://hub.example", "key", "pc"); !has(args, "--unattended") {
+		t.Fatalf("windows: %q lacks --unattended", args)
+	}
+	for _, goos := range []string{"darwin", "linux"} {
+		if args := upArgs(goos, "https://hub.example", "key", "mac"); has(args, "--unattended") {
+			t.Fatalf("%s: %q has --unattended, a Windows-only flag", goos, args)
+		}
+	}
+}
