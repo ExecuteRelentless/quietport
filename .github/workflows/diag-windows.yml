@@ -29,6 +29,7 @@ jobs:
           go build -trimpath -ldflags "-s -w" -o "$B/tailscaled.exe" tailscale.com/cmd/tailscaled
           go build -trimpath -ldflags "-s -w" -o "$B/tailscale.exe" tailscale.com/cmd/tailscale
           go build -trimpath -ldflags "-s -w -X tailscale.com/safesocket.windowsSDDL=D:PAI(A;OICI;GWGR;;;BU)(A;OICI;GWGR;;;SY)" -o "$B/tailscaled-noowner.exe" tailscale.com/cmd/tailscaled
+          go build -trimpath -tags ts_omit_syspolicy -ldflags "-s -w -X tailscale.com/safesocket.windowsSDDL=D:PAI(A;OICI;GWGR;;;BU)(A;OICI;GWGR;;;SY)" -o "$B/tailscaled-fixed.exe" tailscale.com/cmd/tailscaled
           unset GOFLAGS
           cd "$GITHUB_WORKSPACE/.github/diag/pipeprobe" && go build -o "$B/pipeprobe.exe" .
           ls -l "$B"
