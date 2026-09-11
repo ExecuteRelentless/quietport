@@ -1,0 +1,76 @@
+name: diag-windows-reinstall
+# Diagnostic only: a second install on a Windows account where an earlier install left tailscaled's state behind
+# (a member retrying after a failed attempt, 2026-09-11). Both jobs install once with the published client, then
+# again with a new invite: "shipped" with the published agent, "fix" with qpsync-agent.exe built from this branch.
+# Each job burns two single-use invites (secrets QP_CI_RI_*), so a rerun needs new ones. Read the RI: lines.
+on:
+  push:
+    branches: ["diag/windows-reinstall"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  agent:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.27" }
+      - name: Build qpsync-agent.exe for Windows from this branch
+        env: { CGO_ENABLED: "0", GOOS: windows, GOARCH: amd64 }
+        run: |
+          V=0.1.18
+          go build -trimpath -ldflags "-X main.Version=$V -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=${{ vars.RELEASE_PUBKEY }}" -o qpsync-agent.exe ./cmd/qpsync-agent
+      - uses: actions/upload-artifact@v4
+        with: { name: agent-fix, path: qpsync-agent.exe }
+  reinstall:
+    needs: agent
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: shipped, first: QP_CI_RI_SHIPPED_1, second: QP_CI_RI_SHIPPED_2 }
+          - { variant: fix, first: QP_CI_RI_FIX_1, second: QP_CI_RI_FIX_2 }
+    name: reinstall ${{ matrix.variant }}
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        if: matrix.variant == 'fix'
+        with: { name: agent-fix, path: C:\Users\Public\qpe2e\fix }
+      - name: Stage the client bundle, the second-install agent and both invite payloads
+        shell: pwsh
+        env:
+          CODE1: ${{ secrets[matrix.first] }}
+          CODE2: ${{ secrets[matrix.second] }}
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $E = 'C:\Users\Public\qpe2e'
+          New-Item -ItemType Directory -Force "$E\bundle", "$E\agent2" | Out-Null
+          Invoke-WebRequest -Uri https://quietport.app/dl/quietport-windows-amd64.zip -OutFile "$E\bundle.zip"
+          Expand-Archive "$E\bundle.zip" -DestinationPath "$E\bundle" -Force
+          "RI: published bundle VERSION $(Get-Content "$E\bundle\VERSION"), variant ${{ matrix.variant }}"
+          if ('${{ matrix.variant }}' -eq 'fix') { Copy-Item "$E\fix\qpsync-agent.exe" "$E\agent2\" } else { Copy-Item "$E\bundle\qpsync-agent.exe" "$E\agent2\" }
+          Get-FileHash "$E\bundle\qpsync-agent.exe", "$E\agent2\qpsync-agent.exe" | ForEach-Object { "RI: sha256 $($_.Hash.Substring(0,16)) $($_.Path)" }
+          Invoke-WebRequest -Uri "https://quietport.app/j/$env:CODE1/payload" -OutFile "$E\payload1.json"
+          Invoke-WebRequest -Uri "https://quietport.app/j/$env:CODE2/payload" -OutFile "$E\payload2.json"
+          "RI: payloads $((Get-Item "$E\payload1.json").Length) and $((Get-Item "$E\payload2.json").Length) bytes"
+          Set-Content -Path "$E\code1.txt" -Value $env:CODE1 -NoNewline
+          Set-Content -Path "$E\code2.txt" -Value $env:CODE2 -NoNewline
+          Copy-Item "$env:GITHUB_WORKSPACE\.github\diag\e2e\reinstall.ps1" "$E\reinstall.ps1"
+          Set-Content -Path "$E\run.cmd" -Value "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$E\reinstall.ps1`" > `"$E\out.txt`" 2>&1`r`n"
+          icacls $E /grant 'Users:(OI)(CI)M' /T | Out-Null
+      - name: Install twice as a standard local user (PsExec, real logon, profile loaded)
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $E = 'C:\Users\Public\qpe2e'
+          $pw = ConvertTo-SecureString 'Qp-e2e-2026!x' -AsPlainText -Force
+          New-LocalUser -Name qpstd -Password $pw -PasswordNeverExpires -AccountNeverExpires | Out-Null
+          Add-LocalGroupMember -Group Users -Member qpstd
+          Invoke-WebRequest -Uri https://download.sysinternals.com/files/PSTools.zip -OutFile pstools.zip
+          Expand-Archive pstools.zip -DestinationPath pstools -Force
+          & .\pstools\PsExec64.exe -accepteula -nobanner -u qpstd -p 'Qp-e2e-2026!x' -w $E cmd /c "$E\run.cmd" 2>&1 | Out-String
+          "----- out.txt -----"
+          Get-Content "$E\out.txt" -ErrorAction SilentlyContinue
