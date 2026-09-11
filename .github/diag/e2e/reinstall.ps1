@@ -10,8 +10,15 @@ Copy-Item "$E\bundle\*" $Q -Force
 $code1 = (Get-Content "$E\code1.txt" -Raw).Trim()
 $code2 = (Get-Content "$E\code2.txt" -Raw).Trim()
 
+# The real installer runs Install inside Quietport.exe. Install stops an earlier agent with `taskkill /IM
+# qpsync-agent.exe`, which also kills the calling process when it runs under that name, so run it under the
+# installer's name.
+$I = Join-Path $E 'installer'
+New-Item -ItemType Directory -Force $I | Out-Null
+
 'RI: ===== first install (published agent)'
-& "$Q\qpsync-agent.exe" install --code $code1 --payload "$E\payload1.json"
+Copy-Item "$E\bundle\qpsync-agent.exe" "$I\Quietport.exe" -Force
+& "$I\Quietport.exe" install --code $code1 --payload "$E\payload1.json"
 "RI: first install exit=$LASTEXITCODE"
 Get-Process qpsync-agent, tailscaled -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
@@ -19,8 +26,9 @@ Start-Sleep -Seconds 2
 
 'RI: ===== second install, new invite (this job''s agent)'
 Copy-Item "$E\agent2\qpsync-agent.exe" "$Q\qpsync-agent.exe" -Force
+Copy-Item "$E\agent2\qpsync-agent.exe" "$I\Quietport.exe" -Force
 $sw = [Diagnostics.Stopwatch]::StartNew()
-& "$Q\qpsync-agent.exe" install --code $code2 --payload "$E\payload2.json"
+& "$I\Quietport.exe" install --code $code2 --payload "$E\payload2.json"
 "RI: second install exit=$LASTEXITCODE after $([int]$sw.Elapsed.TotalSeconds) s"
 if (-not (Get-Process qpsync-agent -ErrorAction SilentlyContinue)) {
   'RI: no background agent (a PsExec session cannot run the logon task); starting "qpsync-agent run" as the Run key would'
