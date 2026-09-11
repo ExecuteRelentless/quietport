@@ -1,11 +1,14 @@
 # Diagnostic for 0.1.21 (ADR 0015, ADR 0016). Runs as the standard local user qpstd (PsExec, real logon, profile
-# loaded), the way a member's install runs. One of three variants, from variant.txt:
+# loaded), the way a member's install runs. One of four variants, from variant.txt:
 #   fresh     a first install: the daemon must run as "Quietport Network.exe" and the folder must sync
 #   update    an install on 0.1.20, then the state a self-update leaves behind (new agent binary, the old daemon
 #             still running under the old name): the new agent must rename the file, stop that daemon, and stay online
-#   reinstall a second install onto a folder holding files this computer has no record of: they must move aside and
-#             never reach the hub. Also: a tailscaled.exe running OUTSIDE the app folder must survive the install,
-#             and an install run from inside the app folder must not kill itself.
+#   stop      a second install while our own programs are running, with a tailscaled.exe running OUTSIDE the app
+#             folder: ours must be stopped, the outside one must survive, and an install run from inside the app
+#             folder must not kill itself
+#   reinstall a second install onto a folder holding files this computer has no record of. Nothing of ours runs
+#             beforehand, so nothing can have sent those files anywhere: if they appear in the bucket, the reinstall
+#             put them there. They must move aside instead.
 # Every line the operator reads starts with QPD:. What reached the hub is checked in the circle's bucket afterwards.
 $ErrorActionPreference = 'Continue'
 $E = 'C:\Users\Public\qpe2e'
@@ -66,6 +69,17 @@ function Install-From($exe, $n) {
     "QPD: install $n exit=$LASTEXITCODE"
 }
 
+function Set-NoDeviceOfItsOwn {
+    # A retried install: the config is here, the enrolment never finished, so this computer has no device of its own
+    # and no record of what made the folder. Deleting the config instead would leave no port, and Install would then
+    # stop nothing at all, which is half of what these variants have to exercise.
+    $cfgPath = Join-Path $Q 'config.json'
+    $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
+    $cfg.device_id = 0
+    [IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 20))  # WriteAllText: UTF-8 with no BOM, which Go reads
+    'QPD: device_id set to 0 (a retried install)'
+}
+
 # --- staging: the app folder, as the installer would leave it -------------------------------------------------
 New-Item -ItemType Directory -Force $Q | Out-Null
 Copy-Item "$E\bundle\*" $Q -Force
@@ -82,13 +96,7 @@ Show-Daemon 'after install 1'
 $folder = Get-CircleFolder
 if (-not $folder) { 'QPD: no circle folder after install 1'; Show-Log; 'QPD: done'; exit }
 
-if ($V -eq 'reinstall') {
-    # files this computer has no record of: one must survive the reinstall, and NEITHER may reach the hub
-    Set-Content -Path (Join-Path $folder.FullName "do-not-upload-$RUN.txt") -Value "must never reach the hub ($RUN)"
-    New-Item -ItemType Directory -Force (Join-Path $folder.FullName 'Old notes') | Out-Null
-    Set-Content -Path (Join-Path $folder.FullName 'Old notes\note.txt') -Value "also must never reach the hub ($RUN)"
-    Show-Folder 'before the reinstall'
-
+if ($V -eq 'stop') {
     # a real Tailscale install elsewhere on the computer: a stand-in running from outside the app folder. 0.1.20 ran
     # taskkill /IM tailscaled.exe, which would have ended this one.
     $fake = Join-Path $E 'faketailscale'
@@ -101,17 +109,9 @@ if ($V -eq 'reinstall') {
     Start-Process -FilePath "$Q\qpsync-agent.exe" -ArgumentList run -WorkingDirectory 'C:\Windows\System32' -WindowStyle Hidden
     Start-Sleep -Seconds 30
     $ours = @(Get-Process qpsync-agent, 'Quietport Network', rclone -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
-    "QPD: our pids before the reinstall: $($ours -join ', ')"
+    "QPD: our pids before the second install: $($ours -join ', ')"
 
-    # A retried install: the config is here, the enrolment never finished, so this computer has no device of its own
-    # and no record of what made the folder. Deleting the config instead would leave no port, and Install would then
-    # stop nothing at all, which is the half of this that must be exercised.
-    $cfgPath = Join-Path $Q 'config.json'
-    $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
-    $cfg.device_id = 0
-    [IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 20))  # WriteAllText: UTF-8 with no BOM, which Go reads
-    "QPD: device_id set to 0 (a retried install)"
-
+    Set-NoDeviceOfItsOwn
     # run from INSIDE the app folder: 0.1.20's taskkill /IM qpsync-agent.exe killed this very process
     Install-From "$Q\qpsync-agent.exe" 2
     Show-Procs 'after install 2'
@@ -119,6 +119,21 @@ if ($V -eq 'reinstall') {
     foreach ($was in $ours) {
         "QPD: our earlier pid $was stopped by the install: $($null -eq (Get-Process -Id $was -ErrorAction SilentlyContinue))"
     }
+    Stop-Ours
+    $folder = Get-CircleFolder
+}
+
+if ($V -eq 'reinstall') {
+    # Files this computer has no record of. Nothing of ours has run since the install, and nothing of ours runs now,
+    # so the only way these can reach the hub is the resync the second install sets up. They must move aside first.
+    Set-Content -Path (Join-Path $folder.FullName "do-not-upload-$RUN.txt") -Value "must never reach the hub ($RUN)"
+    New-Item -ItemType Directory -Force (Join-Path $folder.FullName 'Old notes') | Out-Null
+    Set-Content -Path (Join-Path $folder.FullName 'Old notes\note.txt') -Value "also must never reach the hub ($RUN)"
+    Show-Folder 'before the reinstall'
+    Show-Procs 'before the reinstall (nothing of ours may be running)'
+
+    Set-NoDeviceOfItsOwn
+    Install-From "$Q\qpsync-agent.exe" 2
     $aside = @(Get-ChildItem $S -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'Previous files*' })
     "QPD: set-aside folders: $($aside.Count)"
     foreach ($a in $aside) {
@@ -152,7 +167,6 @@ if ($V -eq 'update') {
     Show-Procs 'after the new agent started'
 }
 else {
-    # fresh and reinstall: run the background agent the way Task Scheduler does, from C:\Windows\System32
     'QPD: ===== background agent, started in C:\Windows\System32 as Task Scheduler does'
     Start-Process -FilePath "$Q\qpsync-agent.exe" -ArgumentList run -WorkingDirectory 'C:\Windows\System32' -WindowStyle Hidden
     Start-Sleep -Seconds 20

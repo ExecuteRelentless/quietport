@@ -37,9 +37,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { variant: fresh, secret: QP_CI_DMN_FRESH, secret2: QP_CI_DMN_FRESH }
-          - { variant: update, secret: QP_CI_DMN_UPDATE, secret2: QP_CI_DMN_UPDATE }
-          - { variant: reinstall, secret: QP_CI_DMN_RE1, secret2: QP_CI_DMN_RE2 }
+          # fresh and update passed in run 34656085459 and are not re-run: each install costs a single-use invite.
+          # That run's reinstall variant proved the set-aside but could not prove "never reaches the hub", because
+          # the harness ran the agent for 30 s beforehand so the install would have something to stop, and that
+          # agent uploaded the files itself. The two halves are separate variants now.
+          - { variant: stop, secret: QP_CI_DMN_STOP1, secret2: QP_CI_DMN_STOP2 }
+          - { variant: reinstall, secret: QP_CI_DMN_RI1, secret2: QP_CI_DMN_RI2 }
     name: ${{ matrix.variant }}
     runs-on: windows-11-arm
     timeout-minutes: 25
