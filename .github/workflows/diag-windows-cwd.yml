@@ -33,7 +33,7 @@ jobs:
           - { variant: shipped, secret: QP_CI_CWD_SHIPPED }
           - { variant: fix, secret: QP_CI_CWD_FIX }
     name: cwd ${{ matrix.variant }}
-    runs-on: windows-2022
+    runs-on: windows-11-arm
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
