@@ -41,8 +41,11 @@ jobs:
           # That run's reinstall variant proved the set-aside but could not prove "never reaches the hub", because
           # the harness ran the agent for 30 s beforehand so the install would have something to stop, and that
           # agent uploaded the files itself. The two halves are separate variants now.
+          # reinstall passed in run 34656640100: the two stray files moved aside and the bucket took only the marker
+          # and the proof file. stop was void in that run, on a harness bug of mine: code2/payload2 were staged only
+          # for reinstall, so the second install got an empty --code, printed its usage and exited 2 before Install
+          # ran. Nothing was stopped, so the decoy surviving proved nothing. Only stop is re-run here.
           - { variant: stop, secret: QP_CI_DMN_STOP1, secret2: QP_CI_DMN_STOP2 }
-          - { variant: reinstall, secret: QP_CI_DMN_RI1, secret2: QP_CI_DMN_RI2 }
     name: ${{ matrix.variant }}
     runs-on: windows-11-arm
     timeout-minutes: 25
@@ -77,7 +80,7 @@ jobs:
           Get-FileHash "$E\agent-new\qpsync-agent.exe" | ForEach-Object { "QPD: 0.1.21 agent sha256 $($_.Hash.Substring(0,16))" }
           Invoke-WebRequest -Uri "https://quietport.app/j/$env:CODE1/payload" -OutFile "$E\payload1.json"
           Set-Content -Path "$E\code1.txt" -Value $env:CODE1 -NoNewline
-          if ($V -eq 'reinstall') {
+          if ($V -eq 'reinstall' -or $V -eq 'stop') {   # both variants do a second install
             Invoke-WebRequest -Uri "https://quietport.app/j/$env:CODE2/payload" -OutFile "$E\payload2.json"
             Set-Content -Path "$E\code2.txt" -Value $env:CODE2 -NoNewline
           }
