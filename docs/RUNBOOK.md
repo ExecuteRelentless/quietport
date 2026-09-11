@@ -1,6 +1,6 @@
 # Quietport operator runbook
 
-This is the operator's reference for the running system as shipped (0.1.14). FR numbers refer to the product
+This is the operator's reference for the running system as shipped (0.1.16). FR numbers refer to the product
 specification, which is not published.
 
 ## The parts
@@ -177,10 +177,11 @@ operator's Mac. Without it the backup is ciphertext.
 ## Releases and self-update
 
 ```
-scripts/build.sh 0.1.14           # hub, client bundles, operator kit; signs SHA256SUMS with ../release-keys/release.key
-scripts/build-installer.sh 0.1.14 <hub host>   # Mac app + DMG (signed, notarized), Windows exe, Linux installers
-scp dist/0.1.14/* <hub>:/tmp/
-ssh <hub> sudo bash deploy/publish-release.sh 0.1.14   # installs nothing itself; registers the release for self-update
+scripts/build-tailscale.sh windows amd64 ../vendor-bins/ts-windows-amd64   # only when tailscale changes; Windows daemon flags live here (ADR 0010)
+scripts/build.sh 0.1.16           # hub, client bundles, operator kit; signs SHA256SUMS with ../release-keys/release.key
+scripts/build-installer.sh 0.1.16 <hub host>   # Mac app + DMG (signed, notarized), Windows exe, Linux installers
+scp dist/0.1.16/* <hub>:/tmp/
+ssh <hub> sudo bash deploy/publish-release.sh 0.1.16   # installs nothing itself; registers the release for self-update
 # a new hub binary: unpack quietport-hub-linux-<arch>.tar.gz and run deploy/hub-install.sh
 ```
 Agents check for a newer version on every heartbeat, download it over the mesh, verify the sha256 and the ed25519

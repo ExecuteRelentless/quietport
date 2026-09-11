@@ -89,7 +89,7 @@ func (t *TS) cli(ctx context.Context, args ...string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// Up logs in with a pre-auth key (install / re-provision).
+// Up logs in with a pre-auth key (install / re-provision). The key never appears in the returned error.
 func (t *TS) Up(ctx context.Context, loginServer, authKey string) error {
 	host, _ := os.Hostname()
 	args := []string{"up", "--reset", "--login-server=" + loginServer, "--accept-dns=false", "--accept-routes=false", "--hostname=" + tsHostname(host)}
@@ -97,7 +97,37 @@ func (t *TS) Up(ctx context.Context, loginServer, authKey string) error {
 		args = append(args, "--auth-key="+authKey)
 	}
 	_, err := t.cli(ctx, args...)
+	if err != nil && authKey != "" {
+		return errors.New(strings.ReplaceAll(err.Error(), authKey, "[auth-key]"))
+	}
 	return err
+}
+
+// WaitReady waits for tailscaled to answer on its socket in any state, logged in or not (docs/adr/0010).
+func (t *TS) WaitReady(ctx context.Context, max time.Duration) error {
+	return waitForDaemon(ctx, func(ctx context.Context) error { _, err := t.Status(ctx, ""); return err }, max, 500*time.Millisecond)
+}
+
+// waitForDaemon polls probe until it succeeds, the deadline passes (the last probe error is returned) or ctx ends.
+func waitForDaemon(ctx context.Context, probe func(context.Context) error, max, interval time.Duration) error {
+	deadline := time.Now().Add(max)
+	for {
+		last := probe(ctx)
+		if last == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("no answer within %s: %w", max, last)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
+	}
 }
 
 func tsHostname(h string) string {

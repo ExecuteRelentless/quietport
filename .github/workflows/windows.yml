@@ -37,8 +37,8 @@ jobs:
           mkdir -p out/client
           go build -trimpath -ldflags "$LD" -o out/client/qpsync-agent.exe ./cmd/qpsync-agent
           go build -trimpath -ldflags "$LD" -o out/client/qpctl.exe ./cmd/qpctl
-          # tailscale is built from its own module (it is not a dependency of this repo)
-          mkdir -p /tmp/ts && (cd /tmp/ts && go mod init tsbuild >/dev/null 2>&1; GOFLAGS=-mod=mod go get tailscale.com@v1.102.3 >/dev/null && GOFLAGS=-mod=mod go build -trimpath -ldflags "-s -w" -o "$GITHUB_WORKSPACE/out/client/tailscaled.exe" tailscale.com/cmd/tailscaled && GOFLAGS=-mod=mod go build -trimpath -ldflags "-s -w" -o "$GITHUB_WORKSPACE/out/client/tailscale.exe" tailscale.com/cmd/tailscale)
+          # tailscale is built from its own module (it is not a dependency of this repo); the Windows daemon flags live in the script (ADR 0010)
+          TSBUILD_DIR=/tmp/ts scripts/build-tailscale.sh windows amd64 out/client
           curl -fsSL -o rclone.zip https://github.com/rclone/rclone/releases/download/v1.75.1/rclone-v1.75.1-windows-amd64.zip
           unzip -q -j rclone.zip '*/rclone.exe' -d out/client
           echo "$V" > out/client/VERSION

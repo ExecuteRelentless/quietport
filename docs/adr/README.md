@@ -12,3 +12,4 @@ A decision is superseded by adding a new record, never by editing the old one.
 - [0007 No web viewer while the "server can never read it" promise stands](0007-no-web-viewer.md)
 - [0008 The Windows installer downloads as a zip](0008-windows-installer-in-a-zip.md)
 - [0009 The site welcomes search engines and AI crawlers](0009-site-welcomes-crawlers.md)
+- [0010 tailscaled runs unelevated on Windows, so the Windows daemon is built with two flags](0010-windows-tailscaled-unelevated.md)

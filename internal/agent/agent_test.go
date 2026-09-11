@@ -1,9 +1,13 @@
 package agent
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestSemverNewer(t *testing.T) {
@@ -55,5 +59,38 @@ func TestMarkerIsNotExcluded(t *testing.T) {
 		if ok, _ := filepath.Match(pat, MarkerFile); ok {
 			t.Fatalf("exclude %q matches the marker %q", pat, MarkerFile)
 		}
+	}
+}
+
+// Install must wait for tailscaled to answer on its socket rather than sleep a fixed 1.5 s (docs/adr/0010): on
+// Windows the daemon's pipe appears some time after launch, and a daemon that dies must be reported as such.
+func TestWaitForDaemon(t *testing.T) {
+	calls := 0
+	probe := func(context.Context) error {
+		calls++
+		if calls < 3 {
+			return errors.New("not yet")
+		}
+		return nil
+	}
+	if err := waitForDaemon(context.Background(), probe, 2*time.Second, 5*time.Millisecond); err != nil {
+		t.Fatalf("daemon that answers on the third poll: %v", err)
+	}
+	if calls != 3 {
+		t.Fatalf("polled %d times, want 3", calls)
+	}
+	never := func(context.Context) error { return errors.New("down") }
+	start := time.Now()
+	err := waitForDaemon(context.Background(), never, 40*time.Millisecond, 5*time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "down") {
+		t.Fatalf("daemon that never answers: err=%v, want the last probe error", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Fatalf("waited %s past a 40 ms deadline", time.Since(start))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := waitForDaemon(ctx, never, time.Hour, 5*time.Millisecond); err == nil {
+		t.Fatal("cancelled context: want an error, got nil")
 	}
 }

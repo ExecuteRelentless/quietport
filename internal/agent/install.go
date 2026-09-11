@@ -82,21 +82,30 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 	_ = os.WriteFile(payloadPath, []byte{}, 0o600)
 	_ = os.Remove(payloadPath)
 
-	// bring the mesh up in the foreground to verify connectivity before reporting success (FR-18)
+	// bring the mesh up in the foreground to verify connectivity before reporting success (FR-18).
+	// tailscaled's output goes to the agent log so a daemon that dies leaves its reason on disk (docs/adr/0010).
 	ts := NewTS(port)
 	tctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go ts.Run(tctx, func(string, ...any) {})
-	time.Sleep(1500 * time.Millisecond)
+	ilog := newLogger()
+	ilog.Printf("install %s on %s/%s: starting tailscaled", Version, runtime.GOOS, runtime.GOARCH)
+	go ts.Run(tctx, ilog.Printf)
+	if err := ts.WaitReady(tctx, 30*time.Second); err != nil {
+		ilog.Printf("install: tailscaled did not answer on its socket: %v", err)
+		return errors.New("the network service on this computer could not start.")
+	}
 	if err := ts.Up(tctx, p.LoginServer, p.PreAuthKey); err != nil {
+		ilog.Printf("install: %v", err)
 		return errors.New("this computer could not reach the network.")
 	}
 	st, err := ts.WaitRunning(tctx, 60*time.Second)
 	if err != nil {
+		ilog.Printf("install: %v", err)
 		return errors.New("this computer could not join the network.")
 	}
 	hub, err := NewHubClient(p.HubAPI, "", ts.ProxyURL())
 	if err != nil {
+		ilog.Printf("install: hub client: %v", err)
 		return errors.New("the connection could not be set up.")
 	}
 	host, _ := os.Hostname()
@@ -109,6 +118,7 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 		time.Sleep(2 * time.Second)
 	}
 	if err != nil {
+		ilog.Printf("install: enrol: %v", err)
 		return errors.New("the network accepted this computer but the hub did not.")
 	}
 	tokSealed, _ := store.Seal(enr.DeviceToken)
