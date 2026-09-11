@@ -16,3 +16,12 @@ from that name. macOS and Linux keep `C`: bisync keys its listing files by the r
 every running Mac into a resync. The agent also changes into its app folder before anything else, so no relative path
 can resolve to System32 or to `/`. Windows CI proves a sync by what reaches the hub's bucket, never by the agent's own
 "sync ok".
+
+**Consequences.** Verified on a hosted Windows runner (branch `diag/windows-cwd`, run 34641088758), with the
+background agent started in `C:\Windows\System32` the way Task Scheduler starts it and one proof file in the circle
+folder. The published 0.1.18 agent filled the folder with 2,470 files in 60 s (1.3 GB, `ntoskrnl.exe` and 1,874 DLLs
+among them) and sent nothing to the hub: its circle's bucket still held only the canary. The 0.1.19 agent left the
+folder at its two files, reported "last sync ok", and its circle's bucket went from 1 object to 3 (the proof file and
+the folder marker). Windows devices start fresh bisync listings under the new name; no Windows device had synced with
+the hub before. A circle's storage key is shared by its members, so removing a member stops their agent at its next
+heartbeat (the circle is marked Removed) but does not revoke storage access until the key is rotated.
