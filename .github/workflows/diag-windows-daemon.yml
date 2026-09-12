@@ -1,15 +1,13 @@
 name: diag-windows-daemon
-# Diagnostic only, for 0.1.21 (ADR 0015, ADR 0016). Proves on a real Windows machine, as a standard local user:
-#   fresh     the mesh daemon runs as "Quietport Network.exe" and the folder syncs
-#   update    the state a self-update leaves (new agent binary, old daemon still running as tailscaled.exe): the new
-#             agent renames the file, stops that daemon, and the device stays online
-#   reinstall files found in a folder this computer has no record of move aside and never reach the hub; a
-#             tailscaled.exe running outside the app folder survives; an install run from inside the app folder
-#             does not kill itself
-# Each variant gets its own person, circle and single-use invite (secrets QP_CI_DMN_*), so the operator can tell from
-# each bucket what reached the hub. The other binaries are unchanged between 0.1.20 and 0.1.21, so the published
-# bundle plus this branch's agent is the 0.1.21 bundle; for fresh/reinstall the daemon is renamed the way
-# scripts/build.sh now writes it. Read the QPD: lines.
+# Diagnostic only. For 0.1.22: the background agent must not leave a console window on a member's screen.
+# qpsync-agent.exe is a console program and the Scheduled Task the installer registers starts it with an interactive
+# token, so Windows opens a black, empty console for it, back at every logon. Closing it kills the agent and the
+# task's only trigger is logon, so nothing starts it again: on 2026-09-11 a device sat offline for 10 minutes after
+# the window was closed. Two variants, each with its own person, circle and single-use invite:
+#   shipped  the published agent, as a CONTROL: its window must be visible, or the check proves nothing
+#   fix      this branch's agent: no visible window, and the folder must still sync
+# The earlier 0.1.21 seams (fresh, update, stop, reinstall) passed in runs 34656085459, 34656640100 and 34657123245.
+# Read the QPC: lines, especially "RESULT".
 on:
   push:
     branches: ["diag/windows-daemon"]
@@ -23,71 +21,52 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version: "1.27" }
-      - name: Build the 0.1.21 agent for Windows from this branch
+      - name: Build the 0.1.22 agent for Windows from this branch
         env: { CGO_ENABLED: "0", GOOS: windows, GOARCH: amd64 }
         run: |
-          V=0.1.21
+          V=0.1.22
           go build -trimpath -ldflags "-X main.Version=$V -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=${{ vars.RELEASE_PUBKEY }}" -o qpsync-agent.exe ./cmd/qpsync-agent
           sha256sum qpsync-agent.exe
       - uses: actions/upload-artifact@v4
-        with: { name: agent-0121, path: qpsync-agent.exe }
+        with: { name: agent-0122, path: qpsync-agent.exe }
   windows:
     needs: agent
     strategy:
       fail-fast: false
       matrix:
         include:
-          # fresh and update passed in run 34656085459 and are not re-run: each install costs a single-use invite.
-          # That run's reinstall variant proved the set-aside but could not prove "never reaches the hub", because
-          # the harness ran the agent for 30 s beforehand so the install would have something to stop, and that
-          # agent uploaded the files itself. The two halves are separate variants now.
-          # reinstall passed in run 34656640100: the two stray files moved aside and the bucket took only the marker
-          # and the proof file. stop was void in that run, on a harness bug of mine: code2/payload2 were staged only
-          # for reinstall, so the second install got an empty --code, printed its usage and exited 2 before Install
-          # ran. Nothing was stopped, so the decoy surviving proved nothing. Only stop is re-run here.
-          - { variant: stop, secret: QP_CI_DMN_STOP1, secret2: QP_CI_DMN_STOP2 }
+          - { variant: shipped, secret: QP_CI_CON_SHIPPED }
+          - { variant: fix, secret: QP_CI_CON_FIX }
     name: ${{ matrix.variant }}
     runs-on: windows-11-arm
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: agent-0121, path: C:\Users\Public\qpe2e\agent-0121 }
-      - name: Stage the bundle, the agents and this variant's invites
+        with: { name: agent-0122, path: C:\Users\Public\qpe2e\agent-0122 }
+      - name: Stage the published bundle, this variant's agent and its invite
         shell: pwsh
         env:
           CODE1: ${{ secrets[matrix.secret] }}
-          CODE2: ${{ secrets[matrix.secret2] }}
         run: |
           $ProgressPreference = 'SilentlyContinue'
           $E = 'C:\Users\Public\qpe2e'
           $V = '${{ matrix.variant }}'
-          New-Item -ItemType Directory -Force "$E\bundle", "$E\agent", "$E\agent-new" | Out-Null
+          New-Item -ItemType Directory -Force "$E\bundle", "$E\agent" | Out-Null
           Invoke-WebRequest -Uri https://quietport.app/dl/quietport-windows-amd64.zip -OutFile "$E\bundle.zip"
           Expand-Archive "$E\bundle.zip" -DestinationPath "$E\bundle" -Force
-          "QPD: published bundle VERSION $(Get-Content "$E\bundle\VERSION"), variant $V"
-          # the 0.1.21 agent always goes to agent-new; what the install starts with depends on the variant
-          Copy-Item "$E\agent-0121\qpsync-agent.exe" "$E\agent-new\" -Force
-          if ($V -eq 'update') {
-            # install on the published release exactly as a member has it, daemon named tailscaled.exe
-            Copy-Item "$E\bundle\qpsync-agent.exe" "$E\agent\" -Force
+          "QPC: published bundle VERSION $(Get-Content "$E\bundle\VERSION"), variant $V"
+          if ($V -eq 'shipped') {
+            Copy-Item "$E\bundle\qpsync-agent.exe" "$E\agent\" -Force   # the control: the agent as members have it
           } else {
-            # the 0.1.21 bundle: this branch's agent, and the daemon under the name scripts/build.sh now writes
-            Copy-Item "$E\agent-0121\qpsync-agent.exe" "$E\agent\" -Force
-            Move-Item "$E\bundle\tailscaled.exe" "$E\bundle\Quietport Network.exe" -Force
+            Copy-Item "$E\agent-0122\qpsync-agent.exe" "$E\agent\" -Force
           }
-          Get-FileHash "$E\agent\qpsync-agent.exe" | ForEach-Object { "QPD: install agent sha256 $($_.Hash.Substring(0,16))" }
-          Get-FileHash "$E\agent-new\qpsync-agent.exe" | ForEach-Object { "QPD: 0.1.21 agent sha256 $($_.Hash.Substring(0,16))" }
           Invoke-WebRequest -Uri "https://quietport.app/j/$env:CODE1/payload" -OutFile "$E\payload1.json"
           Set-Content -Path "$E\code1.txt" -Value $env:CODE1 -NoNewline
-          if ($V -eq 'reinstall' -or $V -eq 'stop') {   # both variants do a second install
-            Invoke-WebRequest -Uri "https://quietport.app/j/$env:CODE2/payload" -OutFile "$E\payload2.json"
-            Set-Content -Path "$E\code2.txt" -Value $env:CODE2 -NoNewline
-          }
           Set-Content -Path "$E\variant.txt" -Value $V -NoNewline
           Set-Content -Path "$E\runid.txt" -Value "${{ github.run_id }}" -NoNewline
-          Copy-Item "$env:GITHUB_WORKSPACE\.github\diag\e2e\daemon.ps1" "$E\daemon.ps1"
-          Set-Content -Path "$E\run.cmd" -Value "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$E\daemon.ps1`" > `"$E\out.txt`" 2>&1`r`n"
+          Copy-Item "$env:GITHUB_WORKSPACE\.github\diag\e2e\console.ps1" "$E\console.ps1"
+          Set-Content -Path "$E\run.cmd" -Value "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$E\console.ps1`" > `"$E\out.txt`" 2>&1`r`n"
           icacls $E /grant 'Users:(OI)(CI)M' /T | Out-Null
       - name: Run it as a standard local user (PsExec, real logon)
         shell: pwsh
