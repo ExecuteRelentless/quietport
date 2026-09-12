@@ -18,6 +18,9 @@ var Version = "dev"
 
 func main() {
 	agent.Version = Version
+	if attachesConsole(runtime.GOOS, os.Args) {
+		attachConsole()
+	}
 	if len(os.Args) < 2 {
 		usage()
 	}
@@ -25,9 +28,6 @@ func main() {
 	case "version":
 		fmt.Println(Version)
 	case "run":
-		if hidesConsole(runtime.GOOS, os.Args) {
-			hideConsole()
-		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		if err := agent.Run(ctx); err != nil {

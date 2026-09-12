@@ -2,26 +2,28 @@ package main
 
 import "testing"
 
-// The background agent is a console program launched by a Scheduled Task with an interactive token, so Windows gives
-// it a console window: black, empty, and back at every logon. It is not cosmetic. A member who closes it stops their
-// own syncing, and the task's only trigger is logon, so nothing starts the agent again (device #33 stayed offline for
-// 10 minutes after Nitin closed it, 2026-09-11). Only "run" hides its console; the rest print for whoever ran them.
-func TestHidesConsoleOnlyForWindowsRun(t *testing.T) {
-	if !hidesConsole("windows", []string{`C:\x\qpsync-agent.exe`, "run"}) {
-		t.Fatal("windows run: the console window must be hidden")
-	}
+// The background agent is started by a Scheduled Task with an interactive token. Built as a console program it was
+// handed a black, empty console window at every logon, and closing that window killed the agent: device #33 sat
+// offline for 10 minutes after it was closed (2026-09-11). On Windows the agent is therefore built with
+// -H windowsgui, so Windows never allocates a console for it. The cost is that the subcommands a person runs in a
+// terminal lose their console too, so every one of them except "run" attaches to the console of whoever ran it.
+// (Hiding the window from inside the process, 0.1.22, did not work on Windows 11: docs/adr/0017.)
+func TestAttachesConsoleForEverySubcommandExceptRun(t *testing.T) {
 	for _, args := range [][]string{
-		{"qpsync-agent.exe", "status"},
-		{"qpsync-agent.exe", "version"},
-		{"qpsync-agent.exe", "install", "--code", "x", "--payload", "y"},
-		{"qpsync-agent.exe", "uninstall", "--remove-folder"},
-		{"qpsync-agent.exe"},
+		{`C:\x\qpsync-agent.exe`, "status"},
+		{`C:\x\qpsync-agent.exe`, "version"},
+		{`C:\x\qpsync-agent.exe`, "install", "--code", "x", "--payload", "y"},
+		{`C:\x\qpsync-agent.exe`, "uninstall", "--remove-folder"},
+		{`C:\x\qpsync-agent.exe`}, // no subcommand: the usage line has to print as well
 	} {
-		if hidesConsole("windows", args) {
-			t.Fatalf("windows %v: this prints for the person who ran it and must keep its console", args[1:])
+		if !attachesConsole("windows", args) {
+			t.Errorf("windows %v: this prints for the person who ran it and needs their console", args[1:])
 		}
 	}
-	if hidesConsole("darwin", []string{"qpsync-agent", "run"}) {
-		t.Fatal("darwin: launchd gives it no console window to hide")
+	if attachesConsole("windows", []string{`C:\x\qpsync-agent.exe`, "run"}) {
+		t.Error("windows run: the Scheduled Task starts this one, and taking a console would put the window back")
+	}
+	if attachesConsole("darwin", []string{"qpsync-agent", "status"}) {
+		t.Error("darwin: the program is handed the terminal's stdout already, there is nothing to attach")
 	}
 }

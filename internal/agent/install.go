@@ -344,16 +344,16 @@ func stopRunningAgent() {
 	time.Sleep(time.Second)
 }
 
-// registerTask: a per-user Scheduled Task at logon with restart-on-failure (FR-14). No admin needed for the current user.
-func registerTask() error {
-	user := os.Getenv("USERNAME")
-	if d := os.Getenv("USERDOMAIN"); d != "" {
-		user = d + `\` + user
-	}
-	xml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-16"?>
+// taskXML: the per-user Scheduled Task, a logon trigger plus restart-on-failure (FR-14). No admin needed for the
+// current user. The trigger also repeats every five minutes for as long as the person is logged on, because a logon
+// trigger alone left an agent that stopped for any reason stopped until the next logon, and RestartOnFailure covers
+// a run that failed, not one that was ended (docs/adr/0017). IgnoreNew means the repetition never starts a second
+// agent alongside a healthy one.
+func taskXML(user, bin string) string {
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>Quietport shared folders</Description></RegistrationInfo>
-  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>%s</UserId></LogonTrigger></Triggers>
+  <Triggers><LogonTrigger><Repetition><Interval>PT5M</Interval><StopAtDurationEnd>false</StopAtDurationEnd></Repetition><Enabled>true</Enabled><UserId>%s</UserId></LogonTrigger></Triggers>
   <Principals><Principal id="Author"><UserId>%s</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
   <Settings>
     <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
@@ -373,23 +373,69 @@ func registerTask() error {
     <RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>
   </Settings>
   <Actions Context="Author"><Exec><Command>%s</Command><Arguments>run</Arguments></Exec></Actions>
-</Task>`, user, user, AgentBin())
+</Task>`, user, user, bin)
+}
+
+func taskUser() string {
+	user := os.Getenv("USERNAME")
+	if d := os.Getenv("USERDOMAIN"); d != "" {
+		user = d + `\` + user
+	}
+	return user
+}
+
+func registerTask() error {
+	if err := createTask(); err != nil {
+		// fallback: HKCU Run key (still per-user, no admin)
+		reg := exec.Command("reg", "add", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "Quietport", "/t", "REG_SZ", "/d", `"`+AgentBin()+`" run`, "/f")
+		hideWindow(reg)
+		if rerr := reg.Run(); rerr != nil {
+			return fmt.Errorf("%v; reg: %v", err, rerr)
+		}
+	}
+	return nil
+}
+
+func createTask() error {
 	f := filepath.Join(AppDir(), "task.xml")
 	// schtasks wants UTF-16LE with BOM for the XML declaration above
-	if err := os.WriteFile(f, utf16le(xml), 0o600); err != nil {
+	if err := os.WriteFile(f, utf16le(taskXML(taskUser(), AgentBin())), 0o600); err != nil {
 		return err
 	}
 	cmd := exec.Command("schtasks", "/Create", "/TN", "Quietport", "/XML", f, "/F")
 	hideWindow(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		// fallback: HKCU Run key (still per-user, no admin)
-		reg := exec.Command("reg", "add", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "Quietport", "/t", "REG_SZ", "/d", `"`+AgentBin()+`" run`, "/f")
-		hideWindow(reg)
-		if rerr := reg.Run(); rerr != nil {
-			return fmt.Errorf("schtasks: %v: %s; reg: %v", err, out, rerr)
-		}
+		return fmt.Errorf("schtasks: %v: %s", err, out)
 	}
 	return nil
+}
+
+// refreshStartup brings a device installed by an older release onto the current startup entry. It is called when the
+// agent starts, because a self-update replaces binaries and nothing else: a device that installed on 0.1.21 or
+// 0.1.22 would otherwise keep a task that only ever starts the agent at logon.
+//
+// It re-registers only a task that is already there. If the query finds none, this install fell back to the HKCU Run
+// key when it was made, and adding a task now would start a second agent at every logon.
+func refreshStartup() (bool, error) {
+	if runtime.GOOS != "windows" {
+		return false, nil
+	}
+	q := exec.Command("schtasks", "/Query", "/TN", "Quietport", "/XML")
+	hideWindow(q)
+	out, err := q.CombinedOutput()
+	if err != nil {
+		return false, nil // no task registered: leave the Run key install alone
+	}
+	if !taskNeedsRefresh(string(out)) {
+		return false, nil
+	}
+	return true, createTask()
+}
+
+// taskNeedsRefresh reports whether a registered task predates the repeating trigger. schtasks writes its /XML output
+// as UTF-16 on some Windows versions, so the NUL bytes come out first; everything looked for here is ASCII.
+func taskNeedsRefresh(registered string) bool {
+	return !strings.Contains(strings.ReplaceAll(registered, "\x00", ""), "<Repetition>")
 }
 
 func utf16le(s string) []byte {

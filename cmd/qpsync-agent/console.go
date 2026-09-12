@@ -1,8 +1,13 @@
 package main
 
-// hidesConsole reports whether this process should hide the console window Windows gave it. The agent is a console
-// program started from a Scheduled Task with an interactive token, so Windows opens a console for it: black, and
-// empty because the agent logs to a file. Every other subcommand prints for whoever ran it and keeps its console.
-func hidesConsole(goos string, args []string) bool {
-	return goos == "windows" && len(args) > 1 && args[1] == "run"
+// attachesConsole reports whether this process should take the console of whoever ran it. On Windows the agent is a
+// GUI-subsystem program (-H windowsgui in the release builds), so Windows allocates no console for it and the
+// Scheduled Task cannot open a window at logon. The cost is that the subcommands a person runs in a terminal are
+// given no console either, and anything they print would go nowhere: every subcommand except "run" therefore
+// attaches to the caller's console, the usage line included. See docs/adr/0017.
+func attachesConsole(goos string, args []string) bool {
+	if goos != "windows" {
+		return false
+	}
+	return !(len(args) > 1 && args[1] == "run")
 }

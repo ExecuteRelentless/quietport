@@ -8,5 +8,7 @@ try { New-Item -ItemType Directory -Force -Path $App | Out-Null } catch { Fail '
 try { Invoke-WebRequest -UseBasicParsing "https://$QHost/dl/quietport-windows-amd64.zip" -OutFile "$App\bundle.zip" } catch { Fail 'the download did not complete.' }
 try { Expand-Archive -Force "$App\bundle.zip" $App; Remove-Item "$App\bundle.zip" } catch { Fail 'the download was damaged.' }
 try { Invoke-WebRequest -UseBasicParsing "https://$QHost/j/$Code/payload" -OutFile "$App\payload.json" } catch { Fail 'this invitation link is no longer valid.' }
-& "$App\qpsync-agent.exe" install --code $Code --payload "$App\payload.json"
+# piped on purpose: the agent is a GUI-subsystem program (docs/adr/0017) and PowerShell does not wait for one of
+# those unless its output is going somewhere, which would end this script before the install had finished
+& "$App\qpsync-agent.exe" install --code $Code --payload "$App\payload.json" | Out-Host
 exit $LASTEXITCODE

@@ -35,7 +35,10 @@ jobs:
           V=${{ steps.v.outputs.version }}
           LD="-X main.Version=$V -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=${{ vars.RELEASE_PUBKEY }}"
           mkdir -p out/client
-          go build -trimpath -ldflags "$LD" -o out/client/qpsync-agent.exe ./cmd/qpsync-agent
+          # a Scheduled Task hands a console program a console window at every logon, so the agent is a GUI program
+          # and Windows gives it no console at all (docs/adr/0017); qpctl is only run in a terminal and stays console
+          go build -trimpath -ldflags "$LD -H windowsgui" -o out/client/qpsync-agent.exe ./cmd/qpsync-agent
+          scripts/assert-windows-gui.py out/client/qpsync-agent.exe
           go build -trimpath -ldflags "$LD" -o out/client/qpctl.exe ./cmd/qpctl
           # tailscale is built from its own module (it is not a dependency of this repo); the Windows daemon flags live in the script (ADR 0010)
           TSBUILD_DIR=/tmp/ts scripts/build-tailscale.sh windows amd64 out/client

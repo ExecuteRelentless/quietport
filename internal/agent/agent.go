@@ -86,6 +86,11 @@ func Run(ctx context.Context) error {
 	if n := stopLeftoverDaemons(AppDir()); n > 0 {
 		a.logf("stopped %d mesh daemon(s) left running by the previous version", n)
 	}
+	if refreshed, err := refreshStartup(); err != nil {
+		a.logf("bringing the startup entry up to date: %v", err)
+	} else if refreshed {
+		a.logf("startup entry brought up to date: the agent now starts again by itself if it stops")
+	}
 
 	go a.ts.Run(ctx, a.logf)
 	if st, err := a.ts.WaitRunning(ctx, 90*time.Second); err != nil {

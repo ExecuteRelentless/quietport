@@ -15,9 +15,17 @@ mkdir -p "$OUT"
 cd "$R"
 
 build(){ # os arch out
-  local ext="" flags="$LD"; [ "$1" = windows ] && { ext=.exe; flags="$LDW"; }
-  CGO_ENABLED=0 GOOS=$1 GOARCH=$2 go build -trimpath -ldflags "$flags" -o "$3/qpsync-agent$ext" ./cmd/qpsync-agent
+  local ext="" flags="$LD" agentflags
+  [ "$1" = windows ] && { ext=.exe; flags="$LDW"; }
+  agentflags="$flags"
+  # a Scheduled Task hands a console program a console window at every logon, so on Windows the agent is a GUI
+  # program and is given no console at all (docs/adr/0017). qpctl is only ever run in a terminal and stays a
+  # console program.
+  [ "$1" = windows ] && agentflags="$flags -H windowsgui"
+  CGO_ENABLED=0 GOOS=$1 GOARCH=$2 go build -trimpath -ldflags "$agentflags" -o "$3/qpsync-agent$ext" ./cmd/qpsync-agent
   CGO_ENABLED=0 GOOS=$1 GOARCH=$2 go build -trimpath -ldflags "$flags" -o "$3/qpctl$ext" ./cmd/qpctl
+  [ "$1" = windows ] && "$R/scripts/assert-windows-gui.py" "$3/qpsync-agent.exe"
+  return 0
 }
 
 echo "== windows resources (icon, version info, manifest)"

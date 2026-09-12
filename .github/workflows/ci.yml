@@ -21,3 +21,64 @@ jobs:
         run: go vet ./...
       - name: test
         run: go test ./... -count=1
+
+  windows:
+    # The Windows agent is a GUI-subsystem program so that the Scheduled Task can no longer open a console window for
+    # it (docs/adr/0017). Two parts of that are provable on a runner and are proved here: that the release build
+    # really produces a GUI program, and that such a program still prints for whoever ran it. The absent window
+    # itself is not provable here, because a runner has no interactive session; it is checked by hand in a real
+    # Windows session before a release, and skipping that check is how 0.1.22 shipped a fix that did nothing.
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.27" }
+      - name: Build the agent the way a release builds it, and a control
+        shell: pwsh
+        run: |
+          go build -trimpath -ldflags "-X main.Version=citest -H windowsgui" -o qpsync-agent.exe ./cmd/qpsync-agent
+          # the control: the same subsystem, printing the same way, with none of the agent's console code
+          go build -trimpath -ldflags "-X main.Version=citest -H windowsgui" -o control-gui.exe ./cmd/qpctl
+      - name: The PE header says GUI, so Windows allocates no console
+        shell: pwsh
+        run: |
+          $b = [IO.File]::ReadAllBytes("$PWD\qpsync-agent.exe")
+          $pe = [BitConverter]::ToInt32($b, 0x3C)
+          $sub = [BitConverter]::ToUInt16($b, $pe + 24 + 68)  # 4 signature + 20 COFF header, Subsystem at 68
+          if ($sub -ne 2) { throw "subsystem $sub, want 2 (WINDOWS_GUI): Windows would still give the agent a console window" }
+          "qpsync-agent.exe: subsystem $sub (WINDOWS_GUI)"
+      - name: A GUI program still prints into the console of whoever ran it
+        shell: pwsh
+        run: |
+          foreach ($t in @(@{exe = "qpsync-agent.exe"; want = $true}, @{exe = "control-gui.exe"; want = $false})) {
+            $out = "$PWD\$($t.exe).console.txt"
+            Remove-Item $out -ErrorAction Ignore
+            Start-Process powershell -Wait -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass',
+              '-File', "$PWD\scripts\windows-console-probe.ps1", '-Exe', "$PWD\$($t.exe)", '-Out', $out
+            $got = [bool]((Get-Content $out -Raw -ErrorAction Ignore) -match 'citest')
+            "$($t.exe): its text reached the console = $got (want $($t.want))"
+            if ($got -ne $t.want) {
+              if ($t.want) { throw "the agent printed nothing into the console it was given: attaching to the caller's console does not work" }
+              throw "the control printed with no console code of its own, so this run proves nothing about the agent"
+            }
+          }
+      - name: A caller that redirects gets the output on its own handles
+        shell: pwsh
+        run: |
+          $piped = & .\qpsync-agent.exe version | Out-String     # the form install-win.ps1 uses
+          if ($piped -notmatch 'citest') { throw "piped: got '$piped'" }
+          if ($LASTEXITCODE -ne 0) { throw "piped: exit $LASTEXITCODE" }
+          .\qpsync-agent.exe version > redirected.txt
+          if ((Get-Content redirected.txt -Raw) -notmatch 'citest') { throw "redirected to a file: nothing was written" }
+          Set-Content -Path qp.cmd -Value "@echo off`r`n`"%~dp0qpsync-agent.exe`" %*"   # the shim install.go writes
+          $shim = cmd /c "qp.cmd version" | Out-String
+          if ($shim -notmatch 'citest') { throw "through qp.cmd: got '$shim'" }
+      - name: Whether PowerShell waits for it unpiped (why install-win.ps1 pipes)
+        shell: pwsh
+        run: |
+          $global:LASTEXITCODE = 0
+          & .\qpsync-agent.exe          # no subcommand: exits 2
+          "unpiped `$LASTEXITCODE = $LASTEXITCODE (2 means PowerShell waited for it, 0 means it did not)"
+      - name: Windows accepts the repeating Scheduled Task
+        shell: pwsh
+        run: go test ./internal/agent -run TestWindowsAcceptsTheRepeatingTask -count=1 -v

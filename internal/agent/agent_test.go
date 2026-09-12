@@ -315,3 +315,51 @@ func TestLeftoverDaemonsAfterUpdate(t *testing.T) {
 		t.Fatalf("stopping %v, want %v", got, want)
 	}
 }
+
+// An agent that stops for any reason stayed stopped until the next logon: the Scheduled Task's only trigger was a
+// logon trigger, and RestartOnFailure covers a run that fails, not one that was ended. That is what turned a stray
+// console window into ten minutes of lost syncing on 2026-09-11. The trigger now repeats, so a stopped agent comes
+// back within minutes, and IgnoreNew keeps the repetition from starting a second one.
+func TestTaskRepeatsSoAStoppedAgentComesBack(t *testing.T) {
+	x := taskXML(`WORKGROUP\sam`, `C:\Users\sam\AppData\Local\Quietport\qpsync-agent.exe`)
+	for _, want := range []string{
+		"<Repetition><Interval>PT5M</Interval><StopAtDurationEnd>false</StopAtDurationEnd></Repetition>",
+		"<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
+		"<LogonTrigger>",
+		`<Command>C:\Users\sam\AppData\Local\Quietport\qpsync-agent.exe</Command>`,
+	} {
+		if !strings.Contains(x, want) {
+			t.Errorf("the task is missing %s", want)
+		}
+	}
+	// no <Duration>: Task Scheduler reads a repetition without one as "indefinitely", which is what a folder that
+	// syncs for years needs
+	if strings.Contains(x, "<Duration>") {
+		t.Error("the repetition must not end while the person is logged on")
+	}
+}
+
+// A device that updates itself from 0.1.21 or 0.1.22 keeps the task it was installed with, so the agent looks at the
+// registered task when it starts and re-registers only that older shape. schtasks writes its /XML output as UTF-16
+// on some Windows versions, so the check has to survive the NUL bytes.
+func TestTaskNeedsRefreshOnlyWithoutTheRepetition(t *testing.T) {
+	old := `<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>sam</UserId></LogonTrigger></Triggers>`
+	if !taskNeedsRefresh(old) {
+		t.Error("a task from 0.1.21 has no repetition and has to be re-registered")
+	}
+	if !taskNeedsRefresh(utf16ish(old)) {
+		t.Error("the same task read back as UTF-16 has to be recognised too")
+	}
+	now := taskXML(`sam`, `C:\x\qpsync-agent.exe`)
+	if taskNeedsRefresh(now) || taskNeedsRefresh(utf16ish(now)) {
+		t.Error("a task that already repeats must be left alone")
+	}
+}
+
+func utf16ish(s string) string {
+	b := make([]byte, 0, len(s)*2)
+	for _, c := range []byte(s) {
+		b = append(b, c, 0)
+	}
+	return string(b)
+}
