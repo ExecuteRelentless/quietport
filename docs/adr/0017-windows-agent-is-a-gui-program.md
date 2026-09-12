@@ -26,7 +26,7 @@ binary they just built (`scripts/assert-windows-gui.py`, which fails a console b
 Two consequences follow, and both are part of the same change.
 
 The subcommands a person runs in a terminal lose their console too, so everything except `run` calls
-`AttachConsole(ATTACH_PARENT_PROCESS)` and rebinds stdout and stderr to `CONOUT$` (`attachesConsole` decides,
+`AttachConsole(ATTACH_PARENT_PROCESS)` and rebinds stdout and stderr to `CONOUT$` (`printsForCaller` decides,
 `attachConsole` acts). A caller that redirected the output to a pipe or a file already handed over usable handles,
 and those are left alone: the check is `GetFileType`, because a GUI program does inherit the parent's console handle
 values and they answer `FILE_TYPE_UNKNOWN` when the process has no console. `install-win.ps1` now pipes the agent's
@@ -58,7 +58,13 @@ runs and never saw a child process's output at all, not even a console program's
 Windows session before a release is published, and a claim about either from CI would be worth nothing.
 
 What CI does cover is the rest: the subsystem byte of the built binary, with both release build lines pinned so the
-flag cannot quietly leave them; the output reaching a caller that redirects it, through a pipe, a file, and the
-`qp.cmd` shim, which is every path the product itself relies on; and the Scheduled Task XML accepted and read back
+flag cannot quietly leave them; the output and the exit code reaching a caller that redirects, which is the one path
+the product itself depends on, since `install-win.ps1` pipes and reports what comes back while the GUI installer
+calls `agent.Install` in-process and never spawns the exe at all; and the Scheduled Task XML accepted and read back
 by a real Task Scheduler, because a trigger written out of order would be rejected whole and leave a device with no
 task at all.
+
+This record claimed, between its first commit and this correction, that CI also read a GUI build's output back out
+of a console screen buffer with a second GUI binary as the control. That is withdrawn: the probe never captured any
+child process's output across three runs, not even a console program's, and the claim is left standing here rather
+than deleted, because what a project believed it had proved is worth as much as what it proved.

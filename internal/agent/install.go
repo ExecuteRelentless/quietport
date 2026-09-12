@@ -437,7 +437,8 @@ func shouldRefreshTask(queried string, queryErr error) bool {
 	return queryErr == nil && taskNeedsRefresh(queried)
 }
 
-// taskNeedsRefresh reports whether a registered task predates the repeating trigger. schtasks writes its /XML output
+// taskNeedsRefresh reports whether a registered task predates the repeating trigger. It reads the XML alone and
+// says nothing about whether the query that produced it succeeded; shouldRefreshTask owns that. schtasks writes its /XML output
 // as UTF-16 on some Windows versions, so the NUL bytes come out first; everything looked for here is ASCII.
 func taskNeedsRefresh(registered string) bool {
 	return !strings.Contains(strings.ReplaceAll(registered, "\x00", ""), "<Repetition>")

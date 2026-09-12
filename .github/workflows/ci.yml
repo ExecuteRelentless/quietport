@@ -44,7 +44,7 @@ jobs:
         run: |
           python scripts/assert-windows-gui.py qpsync-agent.exe
           if ($LASTEXITCODE -ne 0) { throw "the release build would still be given a console window" }
-      - name: A caller that redirects gets the output on its own handles
+      - name: A caller that redirects gets the output and the exit code on its own handles
         shell: pwsh
         run: |
           $piped = & .\qpsync-agent.exe version | Out-String     # the form install-win.ps1 uses
@@ -55,12 +55,15 @@ jobs:
           Set-Content -Path qp.cmd -Value "@echo off`r`n`"%~dp0qpsync-agent.exe`" %*"   # the shim install.go writes
           $shim = cmd /c "qp.cmd version" | Out-String
           if ($shim -notmatch 'citest') { throw "through qp.cmd: got '$shim'" }
-      - name: Whether PowerShell waits for it unpiped (why install-win.ps1 pipes)
-        shell: pwsh
-        run: |
+          # install-win.ps1 ends with "exit $LASTEXITCODE" after its pipe, so a failed install has to come back
+          # non-zero or the member is told it worked. The no-subcommand form exits 2.
+          & .\qpsync-agent.exe | Out-Host
+          $throughPipe = $LASTEXITCODE
+          & .\qpsync-agent.exe                # and unpiped it does not come back at all, which is why the pipe is there
+          $bare = $LASTEXITCODE
           $global:LASTEXITCODE = 0
-          & .\qpsync-agent.exe          # no subcommand: exits 2
-          "unpiped `$LASTEXITCODE = $LASTEXITCODE (2 means PowerShell waited for it, 0 means it did not)"
+          "exit code through a pipe = $throughPipe (want 2), unpiped = $bare (0 means PowerShell did not wait for it)"
+          if ($throughPipe -ne 2) { throw "a failing exit code did not survive the pipe: got $throughPipe, want 2; install-win.ps1 would report a failed install as a success" }
       - name: Windows accepts the repeating Scheduled Task
         shell: pwsh
         run: go test ./internal/agent -run TestWindowsAcceptsTheRepeatingTask -count=1 -v
