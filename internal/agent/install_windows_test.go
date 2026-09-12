@@ -19,7 +19,7 @@ func TestWindowsAcceptsTheRepeatingTask(t *testing.T) {
 	}
 	const name = "QuietportTaskXMLTest"
 	f := filepath.Join(t.TempDir(), "task.xml")
-	if err := os.WriteFile(f, utf16le(taskXML(taskUser(), `C:\Windows\System32\cmd.exe`)), 0o600); err != nil {
+	if err := os.WriteFile(f, utf16le(taskXML(taskAccount(), `C:\Windows\System32\cmd.exe`)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if out, err := exec.Command("schtasks", "/Create", "/TN", name, "/XML", f, "/F").CombinedOutput(); err != nil {

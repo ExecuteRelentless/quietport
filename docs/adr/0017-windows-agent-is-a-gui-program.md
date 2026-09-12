@@ -44,7 +44,13 @@ starts if what is registered has no `<Repetition>` (`refreshStartup`). It re-reg
 there: an install that fell back to the HKCU Run key when `schtasks` failed has no task, and adding one to that
 computer would start two agents at every logon.
 
-**Consequence.** The absent window cannot be regression-tested. No runner has an interactive logon, so there is no
+**Consequence.** The healing starts one logon late. A repetition belongs to the firing of its trigger, and
+registering a task does not fire a logon trigger, so on the computer where the agent was just installed or updated
+the repetition begins at that person's next sign-in; until then the device behaves as it does today. A time trigger
+would start it immediately, at the cost of a failed task run every five minutes on any computer whose owner is not
+signed in, because the task runs under an interactive token.
+
+The absent window cannot be regression-tested. No runner has an interactive logon, so there is no
 seam for it in CI, and a release is checked by hand in a real Windows session before it is published. What CI does
 cover is the rest: the subsystem byte of the built binary, the Scheduled Task XML accepted and read back by a real
 Task Scheduler (a trigger written out of order would be rejected whole, leaving a device with no task at all), and a

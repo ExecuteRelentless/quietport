@@ -363,3 +363,23 @@ func utf16ish(s string) string {
 	}
 	return string(b)
 }
+
+// A device installed on 0.1.21 or 0.1.22 keeps its Scheduled Task through a self-update, which replaces binaries and
+// nothing else, so the agent replaces the task itself when it starts. It replaces only a task that is registered: an
+// install whose schtasks call failed wrote an HKCU Run key instead, and adding a task to that computer would start a
+// second agent at every logon.
+func TestTaskIsReplacedOnlyWhenAnOlderOneIsRegistered(t *testing.T) {
+	old := `<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>sam</UserId></LogonTrigger></Triggers>`
+	if !shouldRefreshTask(old, nil) {
+		t.Error("a registered task with no repetition is the one case that gets replaced")
+	}
+	if shouldRefreshTask(taskXML("sam", `C:\x\qpsync-agent.exe`), nil) {
+		t.Error("a task that already repeats must be left alone")
+	}
+	if shouldRefreshTask("", errors.New("ERROR: The system cannot find the file specified.")) {
+		t.Error("no task registered: this install starts the agent from the Run key, and a task would start a second one")
+	}
+	if shouldRefreshTask(old, errors.New("schtasks is not on this computer")) {
+		t.Error("a query that failed says nothing about what is registered")
+	}
+}

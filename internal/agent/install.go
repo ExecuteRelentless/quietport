@@ -348,8 +348,10 @@ func stopRunningAgent() {
 // current user. The trigger also repeats every five minutes for as long as the person is logged on, because a logon
 // trigger alone left an agent that stopped for any reason stopped until the next logon, and RestartOnFailure covers
 // a run that failed, not one that was ended (docs/adr/0017). IgnoreNew means the repetition never starts a second
-// agent alongside a healthy one.
-func taskXML(user, bin string) string {
+// agent alongside a healthy one. A repetition belongs to the firing of its trigger, so it begins at the next logon,
+// not when the task is registered: on the computer where the agent was just installed or updated, the healing
+// starts with that person's next sign-in.
+func taskXML(account, bin string) string {
 	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>Quietport shared folders</Description></RegistrationInfo>
@@ -373,15 +375,16 @@ func taskXML(user, bin string) string {
     <RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>
   </Settings>
   <Actions Context="Author"><Exec><Command>%s</Command><Arguments>run</Arguments></Exec></Actions>
-</Task>`, user, user, bin)
+</Task>`, account, account, bin)
 }
 
-func taskUser() string {
-	user := os.Getenv("USERNAME")
+// taskAccount: the Windows login the task runs as. "account" is Windows' word for it (CONTEXT.md).
+func taskAccount() string {
+	a := os.Getenv("USERNAME")
 	if d := os.Getenv("USERDOMAIN"); d != "" {
-		user = d + `\` + user
+		a = d + `\` + a
 	}
-	return user
+	return a
 }
 
 func registerTask() error {
@@ -399,7 +402,7 @@ func registerTask() error {
 func createTask() error {
 	f := filepath.Join(AppDir(), "task.xml")
 	// schtasks wants UTF-16LE with BOM for the XML declaration above
-	if err := os.WriteFile(f, utf16le(taskXML(taskUser(), AgentBin())), 0o600); err != nil {
+	if err := os.WriteFile(f, utf16le(taskXML(taskAccount(), AgentBin())), 0o600); err != nil {
 		return err
 	}
 	cmd := exec.Command("schtasks", "/Create", "/TN", "Quietport", "/XML", f, "/F")
@@ -413,9 +416,7 @@ func createTask() error {
 // refreshStartup brings a device installed by an older release onto the current startup entry. It is called when the
 // agent starts, because a self-update replaces binaries and nothing else: a device that installed on 0.1.21 or
 // 0.1.22 would otherwise keep a task that only ever starts the agent at logon.
-//
-// It re-registers only a task that is already there. If the query finds none, this install fell back to the HKCU Run
-// key when it was made, and adding a task now would start a second agent at every logon.
+// What it replaces, and what it leaves alone, is shouldRefreshTask.
 func refreshStartup() (bool, error) {
 	if runtime.GOOS != "windows" {
 		return false, nil
@@ -423,13 +424,17 @@ func refreshStartup() (bool, error) {
 	q := exec.Command("schtasks", "/Query", "/TN", "Quietport", "/XML")
 	hideWindow(q)
 	out, err := q.CombinedOutput()
-	if err != nil {
-		return false, nil // no task registered: leave the Run key install alone
-	}
-	if !taskNeedsRefresh(string(out)) {
+	if !shouldRefreshTask(string(out), err) {
 		return false, nil
 	}
 	return true, createTask()
+}
+
+// shouldRefreshTask decides whether the agent replaces its Scheduled Task when it starts. Only a task that is
+// already registered and predates the repeating trigger is replaced. A query that fails means no task is registered
+// at all: that install fell back to the HKCU Run key, and adding a task to it would start a second agent at logon.
+func shouldRefreshTask(queried string, queryErr error) bool {
+	return queryErr == nil && taskNeedsRefresh(queried)
 }
 
 // taskNeedsRefresh reports whether a registered task predates the repeating trigger. schtasks writes its /XML output

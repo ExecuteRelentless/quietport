@@ -33,35 +33,47 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version: "1.27" }
-      - name: Build the agent the way a release builds it, and a control
+      - name: Build the agent the way a release builds it, and both controls
         shell: pwsh
         run: |
-          go build -trimpath -ldflags "-X main.Version=citest -H windowsgui" -o qpsync-agent.exe ./cmd/qpsync-agent
-          # the control: the same subsystem, printing the same way, with none of the agent's console code
-          go build -trimpath -ldflags "-X main.Version=citest -H windowsgui" -o control-gui.exe ./cmd/qpctl
+          $ld = "-X main.Version=citest"
+          go build -trimpath -ldflags "$ld -H windowsgui" -o qpsync-agent.exe ./cmd/qpsync-agent
+          # the program this replaces: the same code as a console program, which always did reach a console
+          go build -trimpath -ldflags "$ld" -o console-agent.exe ./cmd/qpsync-agent
+          # a GUI program printing the same way with none of the agent's console code
+          go build -trimpath -ldflags "$ld -H windowsgui" -o control-gui.exe ./cmd/qpctl
       - name: The PE header says GUI, so Windows allocates no console
         shell: pwsh
         run: |
-          $b = [IO.File]::ReadAllBytes("$PWD\qpsync-agent.exe")
-          $pe = [BitConverter]::ToInt32($b, 0x3C)
-          $sub = [BitConverter]::ToUInt16($b, $pe + 24 + 68)  # 4 signature + 20 COFF header, Subsystem at 68
-          if ($sub -ne 2) { throw "subsystem $sub, want 2 (WINDOWS_GUI): Windows would still give the agent a console window" }
-          "qpsync-agent.exe: subsystem $sub (WINDOWS_GUI)"
+          python scripts/assert-windows-gui.py qpsync-agent.exe
+          if ($LASTEXITCODE -ne 0) { throw "the release build would still be given a console window" }
       - name: A GUI program still prints into the console of whoever ran it
         shell: pwsh
         run: |
-          foreach ($t in @(@{exe = "qpsync-agent.exe"; want = $true}, @{exe = "control-gui.exe"; want = $false})) {
-            $out = "$PWD\$($t.exe).console.txt"
+          $probe = {
+            param($exe)
+            $out = "$PWD\$exe.console.txt"
             Remove-Item $out -ErrorAction Ignore
             Start-Process powershell -Wait -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass',
-              '-File', "$PWD\scripts\windows-console-probe.ps1", '-Exe', "$PWD\$($t.exe)", '-Out', $out
-            $got = [bool]((Get-Content $out -Raw -ErrorAction Ignore) -match 'citest')
-            "$($t.exe): its text reached the console = $got (want $($t.want))"
-            if ($got -ne $t.want) {
-              if ($t.want) { throw "the agent printed nothing into the console it was given: attaching to the caller's console does not work" }
-              throw "the control printed with no console code of its own, so this run proves nothing about the agent"
+              '-File', "$PWD\scripts\windows-console-probe.ps1", '-Exe', "$PWD\$exe", '-Out', $out
+            $text = Get-Content $out -Raw -ErrorAction Ignore
+            if ($text -notmatch 'PROBE-READY') {
+              throw "$exe : the probe could not read back its own console, so this run proves nothing either way (void, not a failure)"
             }
+            return [bool]($text -match 'citest')
           }
+          $results = @{}
+          foreach ($t in @(
+            @{exe = "console-agent.exe"; want = $true},   # positive control: if this one is False the probe is blind
+            @{exe = "qpsync-agent.exe";  want = $true},   # the fix
+            @{exe = "control-gui.exe";   want = $false})) {
+            $got = & $probe $t.exe
+            $results[$t.exe] = $got
+            "$($t.exe): its text reached the console = $got (want $($t.want))"
+          }
+          if (-not $results["console-agent.exe"]) { throw "even a console program's text did not reach the console: the probe is blind, this run is void" }
+          if ($results["control-gui.exe"]) { throw "the control printed with no console code of its own, so this run proves nothing about the agent" }
+          if (-not $results["qpsync-agent.exe"]) { throw "the agent printed nothing into the console it was given: attaching to the caller's console does not work" }
       - name: A caller that redirects gets the output on its own handles
         shell: pwsh
         run: |

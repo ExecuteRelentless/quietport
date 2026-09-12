@@ -18,7 +18,7 @@ var Version = "dev"
 
 func main() {
 	agent.Version = Version
-	if attachesConsole(runtime.GOOS, os.Args) {
+	if printsForCaller(runtime.GOOS, os.Args) {
 		attachConsole()
 	}
 	if len(os.Args) < 2 {
