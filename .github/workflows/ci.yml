@@ -57,7 +57,9 @@ jobs:
             Start-Process powershell -Wait -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass',
               '-File', "$PWD\scripts\windows-console-probe.ps1", '-Exe', "$PWD\$exe", '-Out', $out
             $text = Get-Content $out -Raw -ErrorAction Ignore
-            if ($text -notmatch 'PROBE-READY') {
+            "--- what the console held after $exe ran ---"
+            $text
+            if ($text -notmatch 'PROBE-READY' -or $text -notmatch 'CMDMARK') {
               throw "$exe : the probe could not read back its own console, so this run proves nothing either way (void, not a failure)"
             }
             return [bool]($text -match 'citest')
