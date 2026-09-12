@@ -25,6 +25,9 @@ func main() {
 	case "version":
 		fmt.Println(Version)
 	case "run":
+		if hidesConsole(runtime.GOOS, os.Args) {
+			hideConsole()
+		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		if err := agent.Run(ctx); err != nil {
