@@ -59,10 +59,14 @@ jobs:
           # non-zero or the member is told it worked. The no-subcommand form exits 2.
           & .\qpsync-agent.exe | Out-Host
           $throughPipe = $LASTEXITCODE
-          & .\qpsync-agent.exe                # and unpiped it does not come back at all, which is why the pipe is there
+          # and unpiped it does not come back at all, which is why the pipe is there. The sentinel matters: PowerShell
+          # leaves $LASTEXITCODE untouched when it does not wait, so without it this reads back the piped 2 above and
+          # says the opposite of the truth.
+          $global:LASTEXITCODE = 7
+          & .\qpsync-agent.exe
           $bare = $LASTEXITCODE
           $global:LASTEXITCODE = 0
-          "exit code through a pipe = $throughPipe (want 2), unpiped = $bare (0 means PowerShell did not wait for it)"
+          "exit code through a pipe = $throughPipe (want 2), unpiped = $bare (7, the sentinel, means PowerShell never waited for it)"
           if ($throughPipe -ne 2) { throw "a failing exit code did not survive the pipe: got $throughPipe, want 2; install-win.ps1 would report a failed install as a success" }
       - name: Windows accepts the repeating Scheduled Task
         shell: pwsh
