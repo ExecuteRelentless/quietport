@@ -50,9 +50,15 @@ the repetition begins at that person's next sign-in; until then the device behav
 would start it immediately, at the cost of a failed task run every five minutes on any computer whose owner is not
 signed in, because the task runs under an interactive token.
 
-The absent window cannot be regression-tested. No runner has an interactive logon, so there is no
-seam for it in CI, and a release is checked by hand in a real Windows session before it is published. What CI does
-cover is the rest: the subsystem byte of the built binary, the Scheduled Task XML accepted and read back by a real
-Task Scheduler (a trigger written out of order would be rejected whole, leaving a device with no task at all), and a
-GUI build's output arriving in the console of the process that ran it, read out of the console screen buffer, with a
-second GUI binary carrying none of this code as the control.
+Two things here cannot be regression-tested, both for the same reason: no runner has an
+interactive session. The absent window is one. The other is a GUI program printing into a terminal someone typed
+into, which is the `AttachConsole` half: a runner redirects every process's output, which is the one case that path
+deliberately leaves alone, and reading the text back out of a console screen buffer instead was tried over three
+runs and never saw a child process's output at all, not even a console program's. Both are checked by hand in a real
+Windows session before a release is published, and a claim about either from CI would be worth nothing.
+
+What CI does cover is the rest: the subsystem byte of the built binary, with both release build lines pinned so the
+flag cannot quietly leave them; the output reaching a caller that redirects it, through a pipe, a file, and the
+`qp.cmd` shim, which is every path the product itself relies on; and the Scheduled Task XML accepted and read back
+by a real Task Scheduler, because a trigger written out of order would be rejected whole and leave a device with no
+task at all.
