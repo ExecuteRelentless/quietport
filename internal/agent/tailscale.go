@@ -90,10 +90,9 @@ func (t *TS) Run(ctx context.Context, logf func(string, ...any)) {
 	backoff := 2 * time.Second
 	for ctx.Err() == nil {
 		started := time.Now()
-		cmd := exec.CommandContext(ctx, TailscaledBin(), t.Args()...)
+		cmd := commandContext(ctx, TailscaledBin(), t.Args()...)
 		cmd.Env = tsEnv(runtime.GOOS, os.Environ())
 		cmd.Stdout, cmd.Stderr = tsLogWriter{logf}, tsLogWriter{logf}
-		hideWindow(cmd)
 		t.mu.Lock()
 		t.cmd = cmd
 		t.mu.Unlock()
@@ -129,8 +128,7 @@ func (w tsLogWriter) Write(p []byte) (int, error) {
 func (t *TS) cli(ctx context.Context, args ...string) ([]byte, error) {
 	c, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(c, TailscaleBin(), append([]string{"--socket=" + TSSocket()}, args...)...)
-	hideWindow(cmd)
+	cmd := commandContext(c, TailscaleBin(), append([]string{"--socket=" + TSSocket()}, args...)...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()

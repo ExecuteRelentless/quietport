@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -251,8 +250,7 @@ func Uninstall(removeFolder bool) error {
 	}
 	if runtime.GOOS == "windows" {
 		// schedule deletion of the directory after we exit
-		cmd := exec.Command("cmd", "/c", "ping 127.0.0.1 -n 3 >nul & rmdir /s /q \""+AppDir()+"\"")
-		hideWindow(cmd)
+		cmd := command("cmd", "/c", "ping 127.0.0.1 -n 3 >nul & rmdir /s /q \""+AppDir()+"\"")
 		_ = cmd.Start()
 	} else {
 		_ = os.RemoveAll(AppDir())
@@ -294,20 +292,20 @@ func registerStartup() error {
 		if err := os.WriteFile(filepath.Join(dir, "quietport.service"), []byte(unit), 0o644); err != nil {
 			return err
 		}
-		return exec.Command("systemctl", "--user", "enable", "quietport.service").Run()
+		return command("systemctl", "--user", "enable", "quietport.service").Run()
 	}
 }
 
 func unregisterStartup() error {
 	switch runtime.GOOS {
 	case "darwin":
-		_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
+		_ = command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
 		return os.Remove(plistPath())
 	case "windows":
-		_ = exec.Command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "Quietport", "/f").Run()
-		return exec.Command("schtasks", "/Delete", "/TN", "Quietport", "/F").Run()
+		_ = command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "Quietport", "/f").Run()
+		return command("schtasks", "/Delete", "/TN", "Quietport", "/F").Run()
 	default:
-		_ = exec.Command("systemctl", "--user", "disable", "--now", "quietport.service").Run()
+		_ = command("systemctl", "--user", "disable", "--now", "quietport.service").Run()
 		return os.Remove(filepath.Join(home(), ".config", "systemd", "user", "quietport.service"))
 	}
 }
@@ -315,31 +313,29 @@ func unregisterStartup() error {
 func startAgent() error {
 	switch runtime.GOOS {
 	case "darwin":
-		_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
-		return exec.Command("launchctl", "bootstrap", fmt.Sprintf("gui/%d", os.Getuid()), plistPath()).Run()
+		_ = command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
+		return command("launchctl", "bootstrap", fmt.Sprintf("gui/%d", os.Getuid()), plistPath()).Run()
 	case "windows":
-		cmd := exec.Command("schtasks", "/Run", "/TN", "Quietport")
-		hideWindow(cmd)
+		cmd := command("schtasks", "/Run", "/TN", "Quietport")
 		if err := cmd.Run(); err == nil {
 			return nil
 		}
-		c := exec.Command(AgentBin(), "run")
-		hideWindow(c)
+		c := command(AgentBin(), "run")
 		return c.Start()
 	default:
-		return exec.Command("systemctl", "--user", "restart", "quietport.service").Run()
+		return command("systemctl", "--user", "restart", "quietport.service").Run()
 	}
 }
 
 func stopRunningAgent() {
 	switch runtime.GOOS {
 	case "darwin":
-		_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
+		_ = command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
 	case "windows":
-		_ = exec.Command("schtasks", "/End", "/TN", "Quietport").Run()
+		_ = command("schtasks", "/End", "/TN", "Quietport").Run()
 		stopOwnProcesses(AppDir())
 	default:
-		_ = exec.Command("systemctl", "--user", "stop", "quietport.service").Run()
+		_ = command("systemctl", "--user", "stop", "quietport.service").Run()
 	}
 	time.Sleep(time.Second)
 }
@@ -390,8 +386,7 @@ func taskAccount() string {
 func registerTask() error {
 	if err := createTask(); err != nil {
 		// fallback: HKCU Run key (still per-user, no admin)
-		reg := exec.Command("reg", "add", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "Quietport", "/t", "REG_SZ", "/d", `"`+AgentBin()+`" run`, "/f")
-		hideWindow(reg)
+		reg := command("reg", "add", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "Quietport", "/t", "REG_SZ", "/d", `"`+AgentBin()+`" run`, "/f")
 		if rerr := reg.Run(); rerr != nil {
 			return fmt.Errorf("%v; reg: %v", err, rerr)
 		}
@@ -405,8 +400,7 @@ func createTask() error {
 	if err := os.WriteFile(f, utf16le(taskXML(taskAccount(), AgentBin())), 0o600); err != nil {
 		return err
 	}
-	cmd := exec.Command("schtasks", "/Create", "/TN", "Quietport", "/XML", f, "/F")
-	hideWindow(cmd)
+	cmd := command("schtasks", "/Create", "/TN", "Quietport", "/XML", f, "/F")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("schtasks: %v: %s", err, out)
 	}
@@ -421,8 +415,7 @@ func refreshStartup() (bool, error) {
 	if runtime.GOOS != "windows" {
 		return false, nil
 	}
-	q := exec.Command("schtasks", "/Query", "/TN", "Quietport", "/XML")
-	hideWindow(q)
+	q := command("schtasks", "/Query", "/TN", "Quietport", "/XML")
 	out, err := q.CombinedOutput()
 	if !shouldRefreshTask(string(out), err) {
 		return false, nil
@@ -460,11 +453,10 @@ func utf16le(s string) []byte {
 func pinFolder(p string) {
 	switch runtime.GOOS {
 	case "darwin":
-		_ = exec.Command(filepath.Join(AppDir(), "qp-sidebar"), "add", p).Run()
+		_ = command(filepath.Join(AppDir(), "qp-sidebar"), "add", p).Run()
 	case "windows":
 		ps := `$o = New-Object -ComObject shell.application; $o.Namespace('` + p + `').Self.InvokeVerb('pintohome')`
-		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps)
-		hideWindow(cmd)
+		cmd := command("powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps)
 		_ = cmd.Run()
 	}
 }
@@ -472,11 +464,10 @@ func pinFolder(p string) {
 func unpinFolder(p string) {
 	switch runtime.GOOS {
 	case "darwin":
-		_ = exec.Command(filepath.Join(AppDir(), "qp-sidebar"), "remove", p).Run()
+		_ = command(filepath.Join(AppDir(), "qp-sidebar"), "remove", p).Run()
 	case "windows":
 		ps := `$o = New-Object -ComObject shell.application; $o.Namespace('` + p + `').Self.InvokeVerb('unpinfromhome')`
-		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps)
-		hideWindow(cmd)
+		cmd := command("powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps)
 		_ = cmd.Run()
 	}
 }
@@ -499,8 +490,7 @@ func UninstallSelf(ts *TS, removeFolder bool) {
 	}
 	if runtime.GOOS == "windows" {
 		stopOwnProcesses(AppDir()) // the daemon, not this process: the removal below still has work to do
-		cmd := exec.Command("cmd", "/c", "ping 127.0.0.1 -n 3 >nul & rmdir /s /q \""+AppDir()+"\"")
-		hideWindow(cmd)
+		cmd := command("cmd", "/c", "ping 127.0.0.1 -n 3 >nul & rmdir /s /q \""+AppDir()+"\"")
 		_ = cmd.Start()
 		os.Exit(0)
 	}
@@ -512,9 +502,9 @@ func UninstallSelf(ts *TS, removeFolder bool) {
 	switch runtime.GOOS {
 	case "darwin":
 		// bootout kills this process; everything is already gone
-		_ = exec.Command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
+		_ = command("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), launchLabel)).Run()
 	default:
-		_ = exec.Command("systemctl", "--user", "stop", "quietport.service").Start()
+		_ = command("systemctl", "--user", "stop", "quietport.service").Start()
 	}
 	os.Exit(0)
 }
@@ -525,10 +515,10 @@ func unregisterStartupFiles() error {
 	case "darwin":
 		return os.Remove(plistPath())
 	case "windows":
-		_ = exec.Command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "Quietport", "/f").Run()
-		return exec.Command("schtasks", "/Delete", "/TN", "Quietport", "/F").Run()
+		_ = command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "Quietport", "/f").Run()
+		return command("schtasks", "/Delete", "/TN", "Quietport", "/F").Run()
 	default:
-		_ = exec.Command("systemctl", "--user", "disable", "quietport.service").Run()
+		_ = command("systemctl", "--user", "disable", "quietport.service").Run()
 		return os.Remove(filepath.Join(home(), ".config", "systemd", "user", "quietport.service"))
 	}
 }

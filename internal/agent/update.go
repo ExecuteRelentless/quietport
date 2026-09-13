@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -173,8 +172,7 @@ func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
 // reexec hands over to the (new) binary. launchd restarts us on macOS; on Windows we start the new process ourselves.
 func (a *Agent) reexec() error {
 	if runtime.GOOS == "windows" {
-		cmd := exec.Command(AgentBin(), "run")
-		hideWindow(cmd)
+		cmd := command(AgentBin(), "run")
 		if err := cmd.Start(); err != nil {
 			return err
 		}

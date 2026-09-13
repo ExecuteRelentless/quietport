@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -88,9 +87,8 @@ func (a *Agent) rotate(ctx context.Context, circleID int64, people []model.Circl
 	start := time.Now()
 	newKey := model.CircleKey{Slug: cs.Slug, Generation: k.Generation + 1, Password: cryptobox.NewCircleSecret(), Salt: cryptobox.NewCircleSecret()}
 	env := a.rc.envMulti(k.Bucket, k.AccessKey, k.SecretKey, k.Endpoint, map[string]model.CircleKey{"OLD": oldKey, "NEW": newKey})
-	cmd := exec.CommandContext(ctx, a.rc.bin, "copy", "OLD:", "NEW:", "--transfers", "4", "--checkers", "8", "-q", "--retries", "5", "--color", "never")
+	cmd := commandContext(ctx, a.rc.bin, "copy", "OLD:", "NEW:", "--transfers", "4", "--checkers", "8", "-q", "--retries", "5", "--color", "never")
 	cmd.Env = env
-	hideWindow(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return 0, fmt.Errorf("re-encryption failed: %s", strings.TrimSpace(ScrubPaths(tailLines(string(out), 3))))
 	}
@@ -129,9 +127,8 @@ func (a *Agent) rotate(ctx context.Context, circleID int64, people []model.Circl
 			}
 		}
 	})
-	purge := exec.CommandContext(ctx, a.rc.bin, "purge", "S3:"+k.Bucket+"/g"+strconv.Itoa(k.Generation), "-q", "--color", "never")
+	purge := commandContext(ctx, a.rc.bin, "purge", "S3:"+k.Bucket+"/g"+strconv.Itoa(k.Generation), "-q", "--color", "never")
 	purge.Env = env
-	hideWindow(purge)
 	if out, err := purge.CombinedOutput(); err != nil {
 		a.logf("%s: old ciphertext not fully removed: %s", cs.Slug, strings.TrimSpace(ScrubPaths(tailLines(string(out), 2))))
 	}

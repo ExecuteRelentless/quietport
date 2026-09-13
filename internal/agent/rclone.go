@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -53,7 +52,7 @@ func (r *Rclone) env(cs CircleState, key model.CircleKey, ak, sk, endpoint strin
 		base = append(base, e)
 	}
 	obs := func(s string) string {
-		out, err := exec.Command(r.bin, "obscure", s).Output()
+		out, err := command(r.bin, "obscure", s).Output()
 		if err != nil {
 			return ""
 		}
@@ -82,7 +81,7 @@ func (r *Rclone) envMulti(bucket, ak, sk, endpoint string, remotes map[string]mo
 		base = append(base, e)
 	}
 	obs := func(s string) string {
-		out, err := exec.Command(r.bin, "obscure", s).Output()
+		out, err := command(r.bin, "obscure", s).Output()
 		if err != nil {
 			return ""
 		}
@@ -157,9 +156,8 @@ func (r *Rclone) Sync(ctx context.Context, cs CircleState, key model.CircleKey, 
 		}
 	}
 	start := time.Now()
-	cmd := exec.CommandContext(ctx, r.bin, args...)
+	cmd := commandContext(ctx, r.bin, args...)
 	cmd.Env = r.env(cs, key, ak, sk, endpoint)
-	hideWindow(cmd)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	err := cmd.Run()
@@ -197,9 +195,8 @@ func (r *Rclone) PruneVersions(ctx context.Context, cs CircleState, key model.Ci
 	age := fmt.Sprintf("%dd", days)
 	local := filepath.Join(CircleDir(cs.DisplayName), VersionsDir)
 	for _, target := range []string{local, cryptRemote + VersionsDir} {
-		cmd := exec.CommandContext(ctx, r.bin, "delete", target, "--min-age", age, "--rmdirs", "-q")
+		cmd := commandContext(ctx, r.bin, "delete", target, "--min-age", age, "--rmdirs", "-q")
 		cmd.Env = r.env(cs, key, ak, sk, endpoint)
-		hideWindow(cmd)
 		_ = cmd.Run() // a missing versions dir is fine
 	}
 	return nil
@@ -207,9 +204,8 @@ func (r *Rclone) PruneVersions(ctx context.Context, cs CircleState, key model.Ci
 
 // RemoteTooLong lists remote files whose decrypted local path would exceed the platform limit (FR-40).
 func (r *Rclone) RemoteTooLong(ctx context.Context, cs CircleState, key model.CircleKey, ak, sk, endpoint string) ([]string, error) {
-	cmd := exec.CommandContext(ctx, r.bin, "lsf", "-R", "--files-only", cryptRemote)
+	cmd := commandContext(ctx, r.bin, "lsf", "-R", "--files-only", cryptRemote)
 	cmd.Env = r.env(cs, key, ak, sk, endpoint)
-	hideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -229,7 +225,7 @@ func (r *Rclone) RemoteTooLong(ctx context.Context, cs CircleState, key model.Ci
 
 // Version of the bundled rclone.
 func (r *Rclone) Version() string {
-	out, err := exec.Command(r.bin, "version").Output()
+	out, err := command(r.bin, "version").Output()
 	if err != nil {
 		return "?"
 	}
