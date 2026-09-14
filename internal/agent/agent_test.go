@@ -517,10 +517,19 @@ func TestAFolderNameNeverLeavesTheSyncRoot(t *testing.T) {
 		"Trip":               "Trip",
 		"Mum's photos: 2026": "Mum's photos- 2026",
 		"Famille été":        "Famille été",
+		// cut to 40 characters: a device name with a long extension keeps its prefix, and a long name that is a
+		// device name once cut and trimmed gets one
+		"lpt9." + strings.Repeat("a", 40):     "Folder lpt9." + strings.Repeat("a", 28),
+		"CON" + strings.Repeat(" ", 37) + "x": "Folder CON",
+		strings.Repeat("é", 39) + "éé end":    strings.Repeat("é", 40),
 	} {
 		dir := CircleDir(name)
 		if got := filepath.Base(dir); got != want || filepath.Dir(dir) != SyncRoot() {
 			t.Errorf("folder %q lands in %s, want %s", name, dir, filepath.Join(SyncRoot(), want))
+		}
+		// the hub stores the rule's result and every computer applies the rule again: the second pass changes nothing
+		if again := safeName(filepath.Base(dir)); again != filepath.Base(dir) {
+			t.Errorf("folder %q: %q the first time, %q the second", name, filepath.Base(dir), again)
 		}
 	}
 }

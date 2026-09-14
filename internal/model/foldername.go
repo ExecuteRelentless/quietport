@@ -22,16 +22,19 @@ func FolderName(s string) string {
 			b.WriteRune(r)
 		}
 	}
-	name := strings.Trim(b.String(), ". ")
+	// the prefix goes on before the cut so a stored name keeps it, and again after, for a long name that only
+	// became a device name when it was cut; applying the rule to its own result then changes nothing
+	name := guardDevice(strings.Trim(b.String(), ". "))
 	if r := []rune(name); len(r) > 40 {
-		name = strings.TrimRight(string(r[:40]), ". ")
+		name = guardDevice(strings.TrimRight(string(r[:40]), ". "))
 	}
-	if name == "" {
-		return ""
-	}
+	return name
+}
+
+func guardDevice(name string) string {
 	stem, _, _ := strings.Cut(name, ".")
-	if windowsDevice(strings.ToUpper(strings.TrimRight(stem, " "))) {
-		name = "Folder " + name
+	if name != "" && windowsDevice(strings.ToUpper(strings.TrimRight(stem, " "))) {
+		return "Folder " + name
 	}
 	return name
 }
