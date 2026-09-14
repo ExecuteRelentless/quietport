@@ -40,25 +40,19 @@ func mountedImageCode() string {
 	return imageCode(string(out), volumeOf(exe))
 }
 
-// volumeOf returns the mount point of the file system holding path. A path under a Gatekeeper translocation is
-// a nullfs mount whose source is a directory on the real volume; that one hop is followed so the executable's
-// image is still found. (Not seen on macOS 26 with the notarized image, where the app runs from /Volumes directly.)
+// volumeOf returns the mount point of the file system holding path. The notarized, signed disk image is not
+// translocated by Gatekeeper, so the installer runs from the image's own volume. Were it translocated, the volume
+// would be the translocation mount, no image would match, and the installer would ask for the link: the safe way
+// to be wrong.
 func volumeOf(path string) string {
-	for hop := 0; hop < 2; hop++ {
-		var st syscall.Statfs_t
-		if err := syscall.Statfs(path, &st); err != nil {
-			return ""
-		}
-		from := cstr(st.Mntfromname[:])
-		if strings.HasPrefix(from, "/dev/") || from == "" {
-			return cstr(st.Mntonname[:])
-		}
-		path = from
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(path, &st); err != nil {
+		return ""
 	}
-	return ""
+	return cString(st.Mntonname[:])
 }
 
-func cstr(b []int8) string {
+func cString(b []int8) string {
 	out := make([]byte, 0, len(b))
 	for _, c := range b {
 		if c == 0 {

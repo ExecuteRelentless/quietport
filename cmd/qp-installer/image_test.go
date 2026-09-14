@@ -8,8 +8,8 @@ import "testing"
 const twoImages = "framework       : 683.160.3\n" +
 	"driver          : 683.160.3\n" +
 	"================================================\n" +
-	"image-path      : /Users/pat/Downloads/Quietport-m3mbfu2q7l4kzx6yvw3ehp5tab.dmg\n" +
-	"image-alias     : /Users/pat/Downloads/Quietport-m3mbfu2q7l4kzx6yvw3ehp5tab.dmg\n" +
+	"image-path      : /Users/pat/Downloads/Quietport-k7qw2xrp4tzv3nbd6hsy5ecfua.dmg\n" +
+	"image-alias     : /Users/pat/Downloads/Quietport-k7qw2xrp4tzv3nbd6hsy5ecfua.dmg\n" +
 	"shadow-path     : <none>\n" +
 	"image-type      : read-only disk image\n" +
 	"blockcount      : 700390\n" +
@@ -32,7 +32,7 @@ const twoImages = "framework       : 683.160.3\n" +
 
 func TestInstallerReadsTheCodeOnlyFromTheImageItRunsFrom(t *testing.T) {
 	cases := []struct{ mount, want string }{
-		{"/Volumes/Quietport Installer", "m3mbfu2q7l4kzx6yvw3ehp5tab"}, // the invite's image
+		{"/Volumes/Quietport Installer", "k7qw2xrp4tzv3nbd6hsy5ecfua"}, // the invite's image
 		{"/Volumes/Quietport Installer 1", ""},                         // the generic image, beside the used one
 		{"/", ""},                                                      // not on any image, whatever is mounted
 		{"", ""},
