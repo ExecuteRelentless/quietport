@@ -121,7 +121,7 @@ var (
 
 // Sync runs one cycle for a circle in the mode that applies to this member (FR-7).
 func (r *Rclone) Sync(ctx context.Context, cs CircleState, key model.CircleKey, ak, sk, endpoint string, mode string, resync bool) Result {
-	local := CircleDir(cs.DisplayName)
+	local := cs.Dir()
 	_ = os.MkdirAll(local, 0o755)
 	stamp := time.Now().Format("2006-01-02T15-04-05")
 	common := []string{"--stats", "0", "--log-level", "NOTICE", "--transfers", "2", "--checkers", "8", "--retries", "3", "--low-level-retries", "20",
@@ -193,7 +193,7 @@ func (r *Rclone) PruneVersions(ctx context.Context, cs CircleState, key model.Ci
 		days = model.DefaultRetention
 	}
 	age := fmt.Sprintf("%dd", days)
-	local := filepath.Join(CircleDir(cs.DisplayName), VersionsDir)
+	local := filepath.Join(cs.Dir(), VersionsDir)
 	for _, target := range []string{local, cryptRemote + VersionsDir} {
 		cmd := commandContext(ctx, r.bin, "delete", target, "--min-age", age, "--rmdirs", "-q")
 		cmd.Env = r.env(cs, key, ak, sk, endpoint)
@@ -210,7 +210,7 @@ func (r *Rclone) RemoteTooLong(ctx context.Context, cs CircleState, key model.Ci
 	if err != nil {
 		return nil, err
 	}
-	base := CircleDir(cs.DisplayName)
+	base := cs.Dir()
 	var bad []string
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {

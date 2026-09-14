@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/text/unicode/norm"
 
 	"quietport.app/quietport/internal/model"
 )
@@ -428,7 +432,7 @@ func TestJoinKeepsTheFoldersAlreadyOnThisComputer(t *testing.T) {
 	}}
 	trip := model.CircleConfig{ID: 9, Slug: "trip-9x2a", DisplayName: "Trip", Generation: 1, S3AccessKey: "AK", S3SecretKey: "SK"}
 	tripKey := model.CircleKey{Slug: "trip-9x2a", Generation: 1, Password: "p", Salt: "s"}
-	if got := joinCircles(&c, []model.CircleConfig{trip}, []model.CircleKey{tripKey}, seal); !slices.Equal(got, []string{"Trip"}) {
+	if got, _ := joinCircles(&c, []model.CircleConfig{trip}, []model.CircleKey{tripKey}, seal); !slices.Equal(got, []string{"Trip"}) {
 		t.Fatalf("joined folders: %v", got)
 	}
 	if len(c.Circles) != 3 {
@@ -453,7 +457,7 @@ func TestJoinKeepsTheFoldersAlreadyOnThisComputer(t *testing.T) {
 	// a folder already here whose key was lost is healed by a link for it
 	c.Circles[0].NeedsKey, c.Circles[0].KeySealed, c.Circles[0].KeyGen = true, "", 0
 	family := model.CircleConfig{ID: 1, Slug: "family", DisplayName: "Family", Generation: 3, S3AccessKey: "FAK", S3SecretKey: "FSK"}
-	if got := joinCircles(&c, []model.CircleConfig{family}, []model.CircleKey{{Slug: "family", Generation: 3, Password: "fp", Salt: "fs"}}, seal); !slices.Equal(got, []string{"Family"}) {
+	if got, _ := joinCircles(&c, []model.CircleConfig{family}, []model.CircleKey{{Slug: "family", Generation: 3, Password: "fp", Salt: "fs"}}, seal); !slices.Equal(got, []string{"Family"}) {
 		t.Fatalf("healed folders: %v", got)
 	}
 	if f := c.Circles[0]; f.NeedsKey || f.KeySealed == "" || f.KeyGen != 3 || !f.Resync {
@@ -517,13 +521,16 @@ func TestAFolderNameNeverLeavesTheSyncRoot(t *testing.T) {
 		"Trip":               "Trip",
 		"Mum's photos: 2026": "Mum's photos- 2026",
 		"Famille été":        "Famille été",
+		// typed with a combining accent, as some keyboards send it: stored in the composed form, so every computer
+		// and the hub agree on one name for one directory
+		"Cafe\u0301": "Caf\u00e9",
 		// cut to 40 characters: a device name with a long extension keeps its prefix, and a long name that is a
 		// device name once cut and trimmed gets one
 		"lpt9." + strings.Repeat("a", 40):     "Folder lpt9." + strings.Repeat("a", 28),
 		"CON" + strings.Repeat(" ", 37) + "x": "Folder CON",
 		strings.Repeat("é", 39) + "éé end":    strings.Repeat("é", 40),
 	} {
-		dir := CircleDir(name)
+		dir := CircleState{CircleConfig: model.CircleConfig{DisplayName: name}}.Dir()
 		if got := filepath.Base(dir); got != want || filepath.Dir(dir) != SyncRoot() {
 			t.Errorf("folder %q lands in %s, want %s", name, dir, filepath.Join(SyncRoot(), want))
 		}
@@ -531,5 +538,240 @@ func TestAFolderNameNeverLeavesTheSyncRoot(t *testing.T) {
 		if again := safeName(filepath.Base(dir)); again != filepath.Base(dir) {
 			t.Errorf("folder %q: %q the first time, %q the second", name, filepath.Base(dir), again)
 		}
+	}
+}
+
+// Two folders with one name never share a directory on a computer (docs/adr/0021). The hub lets a person hold any
+// number of folders called "Shared": their own, one a friend started, one the operator made. Each syncs its
+// directory with its own bucket, so two of them in one directory would carry one folder's files to the other
+// folder's members. The folder already here keeps its directory; the one arriving takes the next free name.
+// macOS and Windows do not tell "shared" from "Shared", so neither does this.
+func TestTwoFoldersWithOneNameGetTheirOwnDirectories(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	seal := func(v any) (string, error) { b, _ := json.Marshal(v); return "sealed:" + string(b), nil }
+	c := Config{DeviceID: 4, Circles: []CircleState{
+		// written by 0.1.25, which had no directory of its own recorded: the display name was the directory
+		{CircleConfig: model.CircleConfig{ID: 1, Slug: "shared-a1", DisplayName: "Shared", Generation: 1}, KeySealed: "k", KeyGen: 1},
+		// removed here: its directory no longer belongs to it, so it holds no name
+		{CircleConfig: model.CircleConfig{ID: 2, Slug: "shared-b2", DisplayName: "Shared 2", Generation: 1}, KeySealed: "k", KeyGen: 1, Removed: true},
+	}}
+	friend := model.CircleConfig{ID: 3, Slug: "shared-c3", DisplayName: "Shared", Generation: 1}
+	friendKey := model.CircleKey{Slug: "shared-c3", Generation: 1, Password: "p", Salt: "s"}
+	names, arrived := joinCircles(&c, []model.CircleConfig{friend}, []model.CircleKey{friendKey}, seal)
+	if !slices.Equal(names, []string{"Shared 2"}) || !slices.Equal(arrived, []string{"shared-c3"}) {
+		t.Fatalf("joined %v, arrived %v: the member must be told the directory the folder is in", names, arrived)
+	}
+	if got := c.Circles[0].Dir(); got != filepath.Join(SyncRoot(), "Shared") {
+		t.Errorf("the folder already here moved to %s", got)
+	}
+	if got := c.Circles[2].Dir(); got != filepath.Join(SyncRoot(), "Shared 2") {
+		t.Errorf("the arriving folder is in %s", got)
+	}
+	if c.Circles[0].Resync {
+		t.Error("the folder already here did not move, so it must not resync")
+	}
+	// a third, in lower case, from someone else
+	names, _ = joinCircles(&c, []model.CircleConfig{{ID: 4, Slug: "shared-d4", DisplayName: "shared", Generation: 1}}, nil, seal)
+	if !slices.Equal(names, []string{"shared 3"}) {
+		t.Fatalf("a name that differs only in case must not share a directory: %v", names)
+	}
+	// one name in two Unicode forms is one directory on macOS, so it is one name here
+	names, _ = joinCircles(&c, []model.CircleConfig{{ID: 5, Slug: "cafe-e5", DisplayName: "Caf\u00e9", Generation: 1}}, nil, seal)
+	if again, _ := joinCircles(&c, []model.CircleConfig{{ID: 6, Slug: "cafe-f6", DisplayName: "Cafe\u0301", Generation: 1}}, nil, seal); !slices.Equal(names, []string{"Caf\u00e9"}) || !slices.Equal(again, []string{"Caf\u00e9 2"}) {
+		t.Fatalf("one name in two Unicode forms: %q then %q", names, again)
+	}
+	// set-aside files go to "Previous files <date>" in the sync root, which syncs nowhere; a folder never has that name
+	if names, _ = joinCircles(&c, []model.CircleConfig{{ID: 7, Slug: "prev-g7", DisplayName: "previous files 2026-09-14", Generation: 1}}, nil, seal); !slices.Equal(names, []string{"Folder previous files 2026-09-14"}) {
+		t.Fatalf("a folder named like the set-aside place: %q", names)
+	}
+	// the same link again: the folder keeps the directory it was given
+	names, arrived = joinCircles(&c, []model.CircleConfig{friend}, []model.CircleKey{friendKey}, seal)
+	if !slices.Equal(names, []string{"Shared 2"}) || len(arrived) != 0 {
+		t.Fatalf("a second join of the same folder: joined %v, arrived %v", names, arrived)
+	}
+	dirs := map[string]string{}
+	for _, cs := range c.Circles {
+		if cs.Removed {
+			continue
+		}
+		key := strings.ToLower(norm.NFC.String(cs.Dir()))
+		if other, ok := dirs[key]; ok {
+			t.Fatalf("%s and %s share %s", other, cs.Slug, cs.Dir())
+		}
+		dirs[key] = cs.Slug
+	}
+}
+
+// A folder that arrives on a computer starts with nothing in its directory (docs/adr/0021, extending 0016 from
+// installs to every arrival). Its first sync is a full resync, which sends up whatever the directory holds, and a
+// directory of that name can hold anything: a removed folder's files left in place, another person's leftovers, or a
+// member's own directory that happens to have the name. What was there goes to "Previous files <date>", which
+// syncs nowhere. A folder that was already here is its own synced copy and is never touched. Setting aside twice in
+// one day keeps both copies. A set-aside that fails leaves the folder unsynced until one succeeds: a half-emptied
+// directory would send the other half up.
+func TestAFolderArrivesWithNothingInIt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := SyncRoot()
+	write := func(p, body string) {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(root, "Trip", "budget.xlsx"), "left over")
+	write(filepath.Join(root, "Trip", MarkerFile), "marker")
+	write(filepath.Join(root, "Family", "photo.jpg"), "synced")
+	seal := func(v any) (string, error) { b, _ := json.Marshal(v); return "sealed:" + string(b), nil }
+	c := Config{DeviceID: 4, Circles: []CircleState{
+		{CircleConfig: model.CircleConfig{ID: 1, Slug: "family", DisplayName: "Family", Generation: 1}, KeySealed: "k", KeyGen: 1, Folder: "Family"},
+	}}
+	trip := model.CircleConfig{ID: 9, Slug: "trip-9x2a", DisplayName: "Trip", Generation: 1}
+	family := model.CircleConfig{ID: 1, Slug: "family", DisplayName: "Family", Generation: 1}
+	tripKey := model.CircleKey{Slug: "trip-9x2a", Generation: 1, Password: "p", Salt: "s"}
+	_, fresh := joinCircles(&c, []model.CircleConfig{trip, family}, []model.CircleKey{tripKey}, seal)
+	if !slices.Equal(fresh, []string{"trip-9x2a"}) {
+		t.Fatalf("new here: %v, want only the folder that arrived", fresh)
+	}
+	if n, err := emptyNewFolders(&c, fresh, "2026-09-14"); n != 1 || err != nil {
+		t.Fatalf("moved %d entries (err %v), want the one left-over file", n, err)
+	}
+	aside := filepath.Join(root, "Previous files 2026-09-14", "Trip")
+	if b, err := os.ReadFile(filepath.Join(aside, "budget.xlsx")); err != nil || string(b) != "left over" {
+		t.Fatalf("the left-over file is not in %s: %v", aside, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Trip", "budget.xlsx")); !os.IsNotExist(err) {
+		t.Fatal("the left-over file is still in the folder about to sync")
+	}
+	if _, err := os.Stat(filepath.Join(root, "Family", "photo.jpg")); err != nil {
+		t.Fatalf("the folder already here lost its files: %v", err)
+	}
+	if !c.Circles[1].syncable() || c.Circles[1].AsidePending {
+		t.Fatalf("an emptied folder with its key must sync: %+v", c.Circles[1])
+	}
+	// the folder is removed and comes back the same day, and its directory has gathered a file again
+	write(filepath.Join(root, "Trip", "budget.xlsx"), "second")
+	c.Circles[1].Removed = true
+	_, fresh = joinCircles(&c, []model.CircleConfig{trip}, []model.CircleKey{tripKey}, seal)
+	if n, err := emptyNewFolders(&c, fresh, "2026-09-14"); n != 1 || err != nil {
+		t.Fatalf("second arrival moved %d (err %v)", n, err)
+	}
+	for dir, want := range map[string]string{aside: "left over", aside + " 2": "second"} {
+		if b, err := os.ReadFile(filepath.Join(dir, "budget.xlsx")); err != nil || string(b) != want {
+			t.Errorf("%s: %q, %v; want %q: a second set-aside must not overwrite the first", dir, b, err, want)
+		}
+	}
+	// the next day the set-aside place cannot be made: the folder keeps its files and does not sync
+	write(filepath.Join(root, "Trip", "budget.xlsx"), "third")
+	write(filepath.Join(root, "Previous files 2026-09-15"), "a file where the directory should go")
+	c.Circles[1].Removed = true
+	_, fresh = joinCircles(&c, []model.CircleConfig{trip}, []model.CircleKey{tripKey}, seal)
+	if _, err := emptyNewFolders(&c, fresh, "2026-09-15"); err == nil {
+		t.Fatal("a set-aside that could not happen reported success")
+	}
+	if f := c.Circles[1]; !f.AsidePending || f.syncable() {
+		t.Fatalf("a folder whose directory could not be emptied must wait: %+v", f)
+	}
+	_ = os.Remove(filepath.Join(root, "Previous files 2026-09-15"))
+	if n, err := emptyNewFolders(&c, []string{"trip-9x2a"}, "2026-09-15"); n != 1 || err != nil || c.Circles[1].AsidePending || !c.Circles[1].syncable() {
+		t.Fatalf("the retry: moved %d, %v, %+v", n, err, c.Circles[1])
+	}
+}
+
+// A computer that 0.1.25 left with two live folders of one name, both syncing one directory: the later moves to its
+// own, and that directory counts as new to it, so it is emptied before the folder syncs there (docs/adr/0021).
+func TestAFolderMovedOffASharedDirectoryIsEmptiedLikeAnArrival(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	seal := func(v any) (string, error) { return "sealed", nil }
+	c := Config{DeviceID: 4, Circles: []CircleState{
+		{CircleConfig: model.CircleConfig{ID: 1, Slug: "photos-a", DisplayName: "Photos", Generation: 1}, KeySealed: "k", KeyGen: 1},
+		{CircleConfig: model.CircleConfig{ID: 2, Slug: "photos-b", DisplayName: "Photos", Generation: 1}, KeySealed: "k", KeyGen: 1},
+	}}
+	_, fresh := joinCircles(&c, []model.CircleConfig{{ID: 3, Slug: "trip", DisplayName: "Trip", Generation: 1}}, nil, seal)
+	if !slices.Equal(fresh, []string{"photos-b", "trip"}) {
+		t.Fatalf("new here: %v, want the folder that moved and the one that arrived", fresh)
+	}
+	if c.Circles[0].Folder != "Photos" || c.Circles[0].Resync || c.Circles[1].Folder != "Photos 2" || !c.Circles[1].Resync {
+		t.Fatalf("placement: %+v", c.Circles[:2])
+	}
+}
+
+// A folder renamed on the hub takes its new name on this computer only where that name is free (docs/adr/0021).
+// Before 0.1.26 a rename whose name was already a directory here left the files where they were but pointed the
+// folder at the other directory, which then synced with this folder's bucket: another folder's files, or anything
+// else of that name, went to this folder's members.
+func TestARenamedFolderNeverMovesIntoADirectoryThatIsTaken(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := SyncRoot()
+	a := &Agent{logger: log.New(io.Discard, "", 0)}
+	c := Config{Circles: []CircleState{
+		{CircleConfig: model.CircleConfig{Slug: "trip", DisplayName: "Trip"}, Folder: "Trip"},
+		{CircleConfig: model.CircleConfig{Slug: "family", DisplayName: "Family"}, Folder: "Family"},
+	}}
+	for p, body := range map[string]string{"Trip/plan.txt": "trip", "Family/photo.jpg": "family", "Holiday/notes.txt": "mine"} {
+		_ = os.MkdirAll(filepath.Join(root, filepath.Dir(p)), 0o755)
+		if err := os.WriteFile(filepath.Join(root, p), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.renameFolder(&c, 0, "Holiday")
+	if f := c.Circles[0]; f.Folder != "Trip" || f.Resync {
+		t.Errorf("renamed to a name already on disk: folder %q, resync %v; it must stay in Trip", f.Folder, f.Resync)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Trip", "plan.txt")); err != nil {
+		t.Errorf("the folder's files moved: %v", err)
+	}
+	a.renameFolder(&c, 0, "family")
+	if f := c.Circles[0]; f.Folder != "family 2" || !f.Resync {
+		t.Errorf("renamed to another folder's name: folder %q, resync %v", f.Folder, f.Resync)
+	}
+	if b, err := os.ReadFile(filepath.Join(root, "family 2", "plan.txt")); err != nil || string(b) != "trip" {
+		t.Errorf("the files did not move with the folder: %v", err)
+	}
+	if entries, _ := os.ReadDir(filepath.Join(root, "Family")); len(entries) != 1 {
+		t.Errorf("the other folder's directory changed: %d entries", len(entries))
+	}
+	a.renameFolder(&c, 0, "Summer")
+	if b, err := os.ReadFile(filepath.Join(root, "Summer", "plan.txt")); err != nil || string(b) != "trip" || c.Circles[0].Folder != "Summer" {
+		t.Errorf("a free name: folder %q, %v", c.Circles[0].Folder, err)
+	}
+}
+
+// Watches follow the folders that are live here (docs/adr/0021). A removed folder keeps the directory it had, and a
+// live folder can have taken that directory since; stopping the removed one's watch must not stop the live one's.
+// Stopping a watch on ".../Shared" must not stop ".../Shared 2" either: a changed file there would then wait for the
+// next scheduled sync instead of syncing when it changes.
+func TestStoppingOneFoldersWatchLeavesTheOthers(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	circles := []CircleState{
+		{CircleConfig: model.CircleConfig{Slug: "old", DisplayName: "Shared"}, Folder: "Shared", Removed: true},
+		{CircleConfig: model.CircleConfig{Slug: "new", DisplayName: "Shared"}, Folder: "Shared"},
+		{CircleConfig: model.CircleConfig{Slug: "two", DisplayName: "Shared"}, Folder: "Shared 2"},
+		{CircleConfig: model.CircleConfig{Slug: "gone", DisplayName: "Trip"}, Folder: "Trip", Removed: true},
+	}
+	watch, stop := watchRoots(circles)
+	if !slices.Equal(stop, []string{filepath.Join(SyncRoot(), "Trip")}) {
+		t.Errorf("stop watching %v, want only Trip: Shared belongs to a live folder now", stop)
+	}
+	if len(watch) != 2 || watch[filepath.Join(SyncRoot(), "Shared")] != "new" || watch[filepath.Join(SyncRoot(), "Shared 2")] != "two" {
+		t.Errorf("watch %v", watch)
+	}
+
+	w, err := NewWatcher(time.Hour)
+	if err != nil {
+		t.Skip("no file watcher here:", err)
+	}
+	shared, shared2 := filepath.Join(SyncRoot(), "Shared"), filepath.Join(SyncRoot(), "Shared 2")
+	for _, d := range []string{shared, shared2} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.AddRoot("a", shared)
+	w.AddRoot("b", shared2)
+	w.RemoveRoot(shared)
+	if !slices.Contains(w.w.WatchList(), shared2) || w.slugFor(filepath.Join(shared2, "x.txt")) != "b" {
+		t.Errorf("stopping Shared stopped Shared 2: %v", w.w.WatchList())
 	}
 }

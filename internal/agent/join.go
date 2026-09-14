@@ -29,16 +29,20 @@ func codeFromLink(s string) string {
 	return inviteCodeRe.FindString(strings.ToLower(strings.TrimSpace(s)))
 }
 
-// joinCircles folds the folders a join returned into the config and reports their names. A folder that is not
-// there is added. A folder already there keeps its place; it takes the hub's current settings and storage
-// credentials, as every heartbeat's bundle does, and a resync is scheduled only when something that matters to the
-// ciphertext changed: it was added, it had been removed, or its key changed. A key from the link replaces what the
-// folder holds only when the folder has none or the link's is newer: a link sealed before a re-key never
-// downgrades a working folder. A key is stored for the generation it was sealed for, so a stale link on a folder
-// without a key leaves it still needing one. A folder whose key did not arrive at all is listed and marked, never
-// dropped: the hub already counts this person a member, and the next link for it heals it.
-func joinCircles(c *Config, circles []model.CircleConfig, keys []model.CircleKey, seal func(any) (string, error)) []string {
-	names := []string{}
+// joinCircles folds the folders a join returned into the config. It reports the directory of every joined folder,
+// the name a member finds in the sync root, and the slugs of the circles whose directory is new to them, which must
+// be emptied before they sync (Config.placeFolders, emptyNewFolders, docs/adr/0021). A folder that is
+// not there is added. A folder already there keeps its place and its directory; it takes the hub's current settings
+// and storage credentials, as every heartbeat's bundle does, and a resync is scheduled only when something that
+// matters to the ciphertext changed: it was added, it had been removed, or its key changed. A key from the link
+// replaces what the folder holds only when the folder has none or the link's is newer: a link sealed before a re-key
+// never downgrades a working folder. A key is stored for the generation it was sealed for, so a stale link on a
+// folder without a key leaves it still needing one. A folder whose key did not arrive at all is listed and marked,
+// never dropped: the hub already counts this person a member, and the next link for it heals it. A folder that
+// arrives never shares a directory with one already here.
+func joinCircles(c *Config, circles []model.CircleConfig, keys []model.CircleKey, seal func(any) (string, error)) (names, fresh []string) {
+	names = []string{}
+	arriving := map[string]bool{}
 	for _, cc := range circles {
 		idx := -1
 		for i := range c.Circles {
@@ -52,13 +56,15 @@ func joinCircles(c *Config, circles []model.CircleConfig, keys []model.CircleKey
 			c.Circles = append(c.Circles, CircleState{CircleConfig: cc, S3Sealed: s3})
 			idx = len(c.Circles) - 1
 			changed = true
+			arriving[cc.Slug] = true
 		}
 		cs := &c.Circles[idx]
 		cs.CircleConfig = cc
 		cs.S3Sealed = s3
 		if cs.Removed {
-			cs.Removed = false
+			cs.readmit()
 			changed = true
+			arriving[cc.Slug] = true
 		}
 		for _, k := range keys {
 			if k.Slug != cc.Slug || (cs.KeySealed != "" && k.Generation <= cs.KeyGen) {
@@ -73,9 +79,16 @@ func joinCircles(c *Config, circles []model.CircleConfig, keys []model.CircleKey
 		if changed {
 			cs.Resync = true
 		}
-		names = append(names, cc.DisplayName)
 	}
-	return names
+	fresh = c.placeFolders(arriving)
+	for _, cc := range circles {
+		for _, cs := range c.Circles {
+			if cs.Slug == cc.Slug {
+				names = append(names, cs.folder())
+			}
+		}
+	}
+	return names, fresh
 }
 
 // join redeems a link from the Share page (or the installer, through it) and returns the names of the folders now
@@ -100,10 +113,12 @@ func (a *Agent) join(ctx context.Context, link string) ([]string, error) {
 		}
 	}
 	var names []string
-	_ = a.store.Update(func(c *Config) { names = joinCircles(c, resp.Circles, keys, a.store.Seal) })
-	for _, n := range names {
-		_ = os.MkdirAll(CircleDir(n), 0o755)
-	}
+	_ = a.store.Update(func(c *Config) {
+		var fresh []string
+		names, fresh = joinCircles(c, resp.Circles, keys, a.store.Seal)
+		// under the store's lock, so no sync can read the new folder before its directory is emptied
+		a.emptyNewFolders(c, fresh)
+	})
 	a.grantOwnDevices(ctx, resp.Circles, keys, resp.OtherDevices)
 	a.refreshWatches()
 	select {

@@ -3,6 +3,8 @@ package model
 import (
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // FolderName is the directory a folder's name becomes on a member's computer, or "" when nothing in the name can be
@@ -10,10 +12,12 @@ import (
 // hub cannot reach outside the sync root either. Path separators and the other characters Windows refuses become
 // "-", control characters are dropped, dots and spaces at either end are dropped (so no name is "." or "..", none is
 // hidden, and Windows, which drops trailing ones itself, makes the same directory as macOS), a Windows device name
-// gets "Folder " in front, and the result is at most 40 characters, cut between characters.
+// gets "Folder " in front, the result is in Unicode's composed form (NFC), and it is at most 40 characters, cut between
+// characters.
 func FolderName(s string) string {
 	var b strings.Builder
-	for _, r := range strings.ToValidUTF8(s, "") {
+	// composed form: macOS treats "é" and "e" plus a combining accent as one name, and so must every comparison
+	for _, r := range norm.NFC.String(strings.ToValidUTF8(s, "")) {
 		switch {
 		case unicode.IsControl(r):
 		case strings.ContainsRune(`/\:*?"<>|`, r):

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,6 +47,90 @@ type CircleState struct {
 	Removed    bool     `json:"removed"`                  // no longer a member; folder left in place, sync stopped
 	Excluded   []string `json:"excluded_paths,omitempty"` // FR-40
 	S3Sealed   string   `json:"s3"`                       // sealed "access:secret"
+	// Folder is this circle's directory under the sync root on this computer, chosen when the circle arrived and kept
+	// after that (docs/adr/0021). Empty in a config written before 0.1.26, where the display name was the directory.
+	Folder string `json:"folder,omitempty"`
+	// AsidePending: the directory is new to this circle and has not been emptied yet, so the circle does not sync
+	// (docs/adr/0021). Set when a set-aside fails, cleared by the one that succeeds.
+	AsidePending bool `json:"aside_pending,omitempty"`
+}
+
+// syncable: the circle has everything a sync needs and nothing that forbids one.
+func (cs CircleState) syncable() bool {
+	return !cs.Removed && !cs.NeedsKey && cs.KeySealed != "" && !cs.AsidePending
+}
+
+// readmit brings back a circle that had been removed here. Its old directory stopped being its own when it was
+// removed, so it is placed again like any arrival.
+func (cs *CircleState) readmit() {
+	cs.Removed, cs.Folder = false, ""
+}
+
+// Dir is where this circle's files are on this computer.
+func (cs CircleState) Dir() string { return filepath.Join(SyncRoot(), cs.folder()) }
+
+func (cs CircleState) folder() string {
+	if cs.Folder != "" {
+		return cs.Folder
+	}
+	return safeName(cs.DisplayName)
+}
+
+// placeFolders gives every live circle that has no directory recorded here one that no other live circle on this
+// computer uses: its name, or the first free of "<name> 2", "<name> 3" and so on (docs/adr/0021). Two circles in one
+// directory would each sync it with their own bucket and carry one folder's files to the other folder's members.
+// Circles already placed keep their directory, and circles that were already on this computer are placed before the
+// ones in arriving, so an arriving folder never takes a directory from one that was here. A circle whose directory
+// changed resyncs, because bisync keys its listings by path. It returns, in config order, the slugs of the circles
+// whose directory is new to them: every arrival, and a folder already here that had to move because an earlier one
+// had its name. Those directories must be emptied before they sync (emptyNewFolders).
+func (c *Config) placeFolders(arriving map[string]bool) []string {
+	fresh := map[string]bool{}
+	for _, pass := range []bool{false, true} {
+		for i := range c.Circles {
+			cs := &c.Circles[i]
+			// a circle with no name yet (an install, before the hub's bundle arrives) is placed once it has one
+			if cs.Removed || cs.Folder != "" || cs.DisplayName == "" || arriving[cs.Slug] != pass {
+				continue
+			}
+			before := cs.folder()
+			cs.Folder = c.freeFolder(i, safeName(cs.DisplayName))
+			if cs.Folder != before {
+				cs.Resync = true
+				fresh[cs.Slug] = true
+			}
+		}
+	}
+	var out []string
+	for _, cs := range c.Circles {
+		if !cs.Removed && (arriving[cs.Slug] || fresh[cs.Slug]) {
+			out = append(out, cs.Slug)
+		}
+	}
+	return out
+}
+
+// freeFolder returns want, or the first of "<want> 2", "<want> 3"... that no live circle other than circle i has. A
+// name that would be the place set-aside files go (setAsideRoot) gets "Folder " in front: a folder of that name
+// would sync whatever is set aside into it.
+func (c *Config) freeFolder(i int, want string) string {
+	if len(want) >= len(setAsideName) && strings.EqualFold(want[:len(setAsideName)], setAsideName) {
+		want = "Folder " + want
+	}
+	taken := func(name string) bool {
+		for j, o := range c.Circles {
+			// both names are in composed form (model.FolderName), so case is the one difference left to ignore
+			if j != i && !o.Removed && o.Folder != "" && strings.EqualFold(o.Folder, name) {
+				return true
+			}
+		}
+		return false
+	}
+	name := want
+	for n := 2; taken(name); n++ {
+		name = want + " " + strconv.Itoa(n)
+	}
+	return name
 }
 
 type Store struct {
@@ -178,8 +264,6 @@ func SaveState(st State) {
 		_ = os.Rename(tmp, StatePath())
 	}
 }
-
-func CircleDir(displayName string) string { return filepath.Join(SyncRoot(), safeName(displayName)) }
 
 // safeName is the directory a folder's name becomes under the sync root (docs/adr/0020).
 func safeName(s string) string {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -166,15 +167,31 @@ func (a *Agent) refreshWatches() {
 	if a.watcher == nil {
 		return
 	}
-	for _, c := range a.store.Config().Circles {
-		dir := CircleDir(c.DisplayName)
-		if c.Removed {
-			a.watcher.RemoveRoot(dir)
-			continue
-		}
-		_ = os.MkdirAll(dir, 0o755)
-		a.watcher.AddRoot(c.Slug, dir)
+	watch, stop := watchRoots(a.store.Config().Circles)
+	for _, dir := range stop {
+		a.watcher.RemoveRoot(dir)
 	}
+	for dir, slug := range watch {
+		_ = os.MkdirAll(dir, 0o755)
+		a.watcher.AddRoot(slug, dir)
+	}
+}
+
+// watchRoots: the directory of every live folder here, and the directories of removed folders that no live folder
+// has taken since, whose watches stop (docs/adr/0021).
+func watchRoots(circles []CircleState) (watch map[string]string, stop []string) {
+	watch = map[string]string{}
+	for _, c := range circles {
+		if !c.Removed {
+			watch[c.Dir()] = c.Slug
+		}
+	}
+	for _, c := range circles {
+		if _, live := watch[c.Dir()]; c.Removed && !live && !slices.Contains(stop, c.Dir()) {
+			stop = append(stop, c.Dir())
+		}
+	}
+	return watch, stop
 }
 
 // --- sync scheduling (FR-30/31/32) ---
@@ -220,7 +237,16 @@ func (a *Agent) syncAll(ctx context.Context, only string) {
 		if only != "" && c.Slug != only {
 			continue
 		}
-		if c.Removed || c.NeedsKey || c.KeySealed == "" {
+		if c.AsidePending && !c.Removed {
+			// its directory could not be emptied when it became new: try again before anything syncs it
+			_ = a.store.Update(func(cf *Config) { a.emptyNewFolders(cf, []string{c.Slug}) })
+			for _, cs := range a.store.Config().Circles {
+				if cs.Slug == c.Slug {
+					c.AsidePending = cs.AsidePending
+				}
+			}
+		}
+		if !c.syncable() {
 			continue
 		}
 		a.syncCircle(ctx, c)
@@ -252,7 +278,7 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 	cfg := a.store.Config()
 	mode := a.effectiveMode(c)
 	if mode != "pull" {
-		ensureMarker(CircleDir(c.DisplayName))
+		ensureMarker(c.Dir())
 	}
 	res := a.rc.Sync(ctx, c, key, ak, sk, cfg.S3Endpoint, mode, c.Resync)
 	// rclone 1.75 aborts a bisync whose prior listing has no files ("empty prior Path1 listing"), which is exactly the
@@ -500,6 +526,9 @@ func (a *Agent) applyBundle(ctx context.Context, b model.ConfigBundle) {
 		if b.SupportContact != "" {
 			c.SupportContact = b.SupportContact
 		}
+		// a config written before 0.1.26 records no directories: the folders already here take theirs first
+		c.placeFolders(nil)
+		arriving := map[string]bool{}
 		seen := map[string]bool{}
 		for _, cc := range b.Circles {
 			seen[cc.Slug] = true
@@ -514,29 +543,19 @@ func (a *Agent) applyBundle(ctx context.Context, b model.ConfigBundle) {
 				c.Circles = append(c.Circles, CircleState{CircleConfig: cc, S3Sealed: s3, Resync: true})
 				idx = len(c.Circles) - 1
 				changed = true
+				arriving[cc.Slug] = true
 				a.logf("circle added: %s", cc.Slug)
 			} else {
 				cs := &c.Circles[idx]
 				if cs.Removed {
-					cs.Removed = false
+					cs.readmit()
 					cs.Resync = true
 					changed = true
+					arriving[cc.Slug] = true
 				}
 				gen := cs.Generation
-				if cs.DisplayName != "" && cs.DisplayName != cc.DisplayName {
-					// the operator renamed the circle: move the folder so nothing is downloaded twice
-					oldDir, newDir := CircleDir(cs.DisplayName), CircleDir(cc.DisplayName)
-					if a.watcher != nil {
-						a.watcher.RemoveRoot(oldDir)
-					}
-					if _, err := os.Stat(newDir); os.IsNotExist(err) {
-						if err := os.Rename(oldDir, newDir); err != nil {
-							a.logf("%s: could not move folder %q to %q: %v", cc.Slug, cs.DisplayName, cc.DisplayName, err)
-						} else {
-							a.logf("%s: folder renamed to %q", cc.Slug, cc.DisplayName)
-						}
-					}
-					cs.Resync = true // bisync listings are keyed by path
+				if cs.Folder != "" && cs.DisplayName != "" && cs.DisplayName != cc.DisplayName {
+					a.renameFolder(c, idx, cc.DisplayName)
 					changed = true
 				}
 				cs.CircleConfig = cc
@@ -580,6 +599,8 @@ func (a *Agent) applyBundle(ctx context.Context, b model.ConfigBundle) {
 				a.logf("circle removed: %s (folder left in place)", c.Circles[i].Slug)
 			}
 		}
+		// under the store's lock, so no sync can read a folder before its new directory is emptied
+		a.emptyNewFolders(c, c.placeFolders(arriving))
 	})
 	if err != nil {
 		a.logf("apply config: %v", err)
@@ -591,6 +612,50 @@ func (a *Agent) applyBundle(ctx context.Context, b model.ConfigBundle) {
 		default:
 		}
 	}
+}
+
+// emptyNewFolders empties the directories new to the given circles, and logs what it moved and what it could not.
+func (a *Agent) emptyNewFolders(c *Config, slugs []string) {
+	if len(slugs) == 0 {
+		return
+	}
+	today := time.Now().Format("2006-01-02")
+	n, err := emptyNewFolders(c, slugs, today)
+	if err != nil {
+		a.logf("could not set aside everything already in a new folder, which waits until it can: %v", err)
+	}
+	if n > 0 {
+		a.logf("moved %d entries already in new folders into %s before their first sync", n, setAsideRoot(today))
+	}
+}
+
+// renameFolder follows a circle renamed on the hub: its directory takes the new name when that name is free on this
+// computer, so nothing is downloaded twice. When another live folder has that name, it takes the next free one; when
+// a directory of that name is already on disk it stays where it is, because moving into it would mix this folder's
+// files with whatever that directory holds (docs/adr/0021).
+func (a *Agent) renameFolder(c *Config, i int, displayName string) {
+	cs := &c.Circles[i]
+	from, to := cs.Folder, c.freeFolder(i, safeName(displayName))
+	if to == from {
+		return
+	}
+	oldDir, newDir := filepath.Join(SyncRoot(), from), filepath.Join(SyncRoot(), to)
+	if _, err := os.Stat(newDir); err == nil {
+		a.logf("%s: renamed to %q; its folder stays %q because %q is already there", cs.Slug, displayName, from, to)
+		return
+	}
+	if a.watcher != nil {
+		a.watcher.RemoveRoot(oldDir)
+	}
+	if _, err := os.Stat(oldDir); err == nil {
+		if err := os.Rename(oldDir, newDir); err != nil {
+			a.logf("%s: could not move folder %q to %q: %v", cs.Slug, from, to, err)
+			return
+		}
+	}
+	cs.Folder = to
+	cs.Resync = true // bisync listings are keyed by path
+	a.logf("%s: folder renamed to %q", cs.Slug, to)
 }
 
 // notifyReprovision: FR-57 second bullet.

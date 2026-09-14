@@ -15,8 +15,9 @@ _Avoid_: server (in code and docs; "server" is fine on the public site), backend
 **Circle**:
 One shared folder: a Garage bucket with a quota, a key generation counter, a member list and an owner. `circle` is
 the name in code, the database and `qpctl`; the site and the client call it a **folder**, because that is what
-members see. A circle's folder on a member's computer is `~/QPSync/<display name>`, and a display name is always a
-name a directory can have (docs/adr/0020).
+members see. A circle's folder on a member's computer is its own directory under `~/QPSync`, named after the display
+name when the circle arrived there (`Shared`, or `Shared 2` when another folder on that computer has the name), and
+it arrives with nothing in it (docs/adr/0021). A display name is always a name a directory can have (docs/adr/0020).
 _Avoid_: share, workspace, group, room
 
 **Person**:

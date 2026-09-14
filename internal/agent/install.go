@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,21 +65,6 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 		return errors.New("the previous network settings on this computer could not be cleared.")
 	}
 	_ = os.MkdirAll(SyncRoot(), 0o755)
-	asideRoot := filepath.Join(SyncRoot(), "Previous files "+time.Now().Format("2006-01-02"))
-	makeFolder := func(dir string) {
-		_ = os.MkdirAll(dir, 0o755) // FR-15
-		if keepFolders {
-			return
-		}
-		if n, err := setAside(dir, filepath.Join(asideRoot, filepath.Base(dir))); err != nil {
-			ilog.Printf("install: could not set aside what was already in %s: %v", dir, err)
-		} else if n > 0 {
-			ilog.Printf("install: moved %d entries out of %s into %s", n, dir, asideRoot)
-		}
-	}
-	for _, name := range p.Circles {
-		makeFolder(CircleDir(name))
-	}
 	sealedKeys, _ := store.Seal(dk)
 	sealedPak, _ := store.Seal(p.PreAuthKey)
 	err = store.Update(func(c *Config) {
@@ -156,8 +142,24 @@ func Install(ctx context.Context, code, payloadPath string) (err error) {
 	// fold the config bundle in (circle display names, S3 creds) using the same code path the agent uses
 	a := &Agent{store: store, ts: ts, logger: newLogger(), st: LoadState(), hub: hub}
 	a.applyBundle(tctx, enr.Config)
+	if !keepFolders {
+		today := time.Now().Format("2006-01-02")
+		_ = store.Update(func(c *Config) {
+			var all []string
+			for _, cs := range c.Circles {
+				all = append(all, cs.Slug)
+			}
+			if n, err := emptyNewFolders(c, all, today); err != nil {
+				ilog.Printf("install: could not set aside everything already in the folders, and those folders wait until it can: %v", err)
+			} else if n > 0 {
+				ilog.Printf("install: moved %d entries already in the folders into %s", n, setAsideRoot(today))
+			}
+		})
+	}
 	for _, c := range store.Config().Circles {
-		makeFolder(CircleDir(c.DisplayName))
+		if !c.Removed {
+			_ = os.MkdirAll(c.Dir(), 0o755) // FR-15
+		}
 	}
 	cancel() // the background agent owns tailscaled from here
 	time.Sleep(500 * time.Millisecond)
@@ -185,6 +187,52 @@ func resetMeshState(dir string) error {
 		time.Sleep(time.Second)
 	}
 	return err
+}
+
+// setAsideName begins the name of the directory in the sync root that holds what was set aside on one day. No folder
+// is ever given a directory whose name begins with it (Config.freeFolder).
+const setAsideName = "Previous files"
+
+// setAsideRoot is where what is set aside on day goes.
+func setAsideRoot(day string) string { return filepath.Join(SyncRoot(), setAsideName+" "+day) }
+
+// emptyNewFolders empties the directories of the given circles, which are new to them, before their first sync
+// there (docs/adr/0016, docs/adr/0021). What a directory holds, apart from Quietport's own files, moves to
+// "Previous files <day>/<folder>" in the sync root, or to "<folder> 2", "<folder> 3"... there when an earlier
+// set-aside that day already used the name, so nothing set aside is ever overwritten. A circle whose directory could
+// not be emptied keeps AsidePending and does not sync until a later call succeeds. It reports how many entries moved
+// and the first error.
+func emptyNewFolders(c *Config, slugs []string, day string) (int, error) {
+	want := map[string]bool{}
+	for _, s := range slugs {
+		want[s] = true
+	}
+	moved := 0
+	var firstErr error
+	for i := range c.Circles {
+		cs := &c.Circles[i]
+		if cs.Removed || !want[cs.Slug] {
+			continue
+		}
+		cs.AsidePending = true
+		aside := filepath.Join(setAsideRoot(day), cs.folder())
+		for n := 2; ; n++ {
+			if _, err := os.Lstat(aside); err != nil {
+				break // free, or not reachable; setAside reports the second
+			}
+			aside = filepath.Join(setAsideRoot(day), cs.folder()+" "+strconv.Itoa(n))
+		}
+		n, err := setAside(cs.Dir(), aside)
+		moved += n
+		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("%s: %w", cs.folder(), err)
+			}
+			continue
+		}
+		cs.AsidePending = false
+	}
+	return moved, firstErr
 }
 
 // setAside moves what a member already has in a folder into asideDir, and reports how many entries it moved.

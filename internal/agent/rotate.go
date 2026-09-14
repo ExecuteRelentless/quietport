@@ -151,21 +151,30 @@ func (a *Agent) createCircle(ctx context.Context, name string) (string, error) {
 		return "", err
 	}
 	s3, _ := a.store.Seal([2]string{cc.S3AccessKey, cc.S3SecretKey})
+	var dir, folder string
 	_ = a.store.Update(func(c *Config) {
+		defer func() {
+			for _, cs := range c.Circles {
+				if cs.Slug == cc.Slug {
+					dir, folder = cs.Dir(), cs.folder()
+				}
+			}
+		}()
 		for i := range c.Circles {
-			if c.Circles[i].ID == cc.ID { // a heartbeat got there first; give it the key
+			if c.Circles[i].ID == cc.ID { // a heartbeat got there first, placed it and emptied it; give it the key
 				c.Circles[i].KeySealed, c.Circles[i].KeyGen, c.Circles[i].Resync = sealed, cc.Generation, true
 				return
 			}
 		}
 		c.Circles = append(c.Circles, CircleState{CircleConfig: cc, KeySealed: sealed, KeyGen: cc.Generation, S3Sealed: s3, Resync: true})
+		a.emptyNewFolders(c, c.placeFolders(map[string]bool{cc.Slug: true}))
 	})
-	_ = os.MkdirAll(CircleDir(cc.DisplayName), 0o755)
+	_ = os.MkdirAll(dir, 0o755)
 	a.refreshWatches()
 	select {
 	case a.syncNow <- cc.Slug:
 	default:
 	}
-	a.logf("%s: new folder %q created from this computer", cc.Slug, cc.DisplayName)
-	return cc.DisplayName, nil
+	a.logf("%s: new folder %q created from this computer", cc.Slug, folder)
+	return folder, nil
 }

@@ -198,13 +198,13 @@ func (a *Agent) serveLocalUI(ctx context.Context, port int, token string) int {
 		var cs []uiCircle
 		for _, c := range a.store.Config().Circles {
 			if !c.Removed && c.CanInvite && c.KeySealed != "" && !c.NeedsKey {
-				cs = append(cs, uiCircle{c.ID, c.DisplayName})
+				cs = append(cs, uiCircle{c.ID, c.folder()})
 			}
 		}
 		var owned []uiCircle
 		for _, c := range a.store.Config().Circles {
 			if !c.Removed && c.Owner && c.KeySealed != "" {
-				owned = append(owned, uiCircle{c.ID, c.DisplayName})
+				owned = append(owned, uiCircle{c.ID, c.folder()})
 			}
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

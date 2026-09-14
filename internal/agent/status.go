@@ -54,7 +54,7 @@ func StatusText() string {
 		if !h.LastSync.IsZero() {
 			last = ago(h.LastSync) + " ago"
 		}
-		fmt.Fprintf(&b, "  %-24s last sync %-12s %s\n", c.DisplayName+"/", last, state)
+		fmt.Fprintf(&b, "  %-24s last sync %-12s %s\n", c.folder()+"/", last, state)
 	}
 	return b.String()
 }

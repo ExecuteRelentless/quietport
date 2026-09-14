@@ -56,7 +56,7 @@ func (w *Watcher) RemoveRoot(root string) {
 	delete(w.roots, root)
 	w.mu.Unlock()
 	for _, p := range w.w.WatchList() {
-		if strings.HasPrefix(p, root) {
+		if p == root || strings.HasPrefix(p, root+string(os.PathSeparator)) {
 			_ = w.w.Remove(p)
 		}
 	}
