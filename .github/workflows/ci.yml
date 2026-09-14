@@ -19,6 +19,12 @@ jobs:
           if [ -n "$bad" ]; then echo "unformatted:"; echo "$bad"; exit 1; fi
       - name: vet
         run: go vet ./...
+      - name: rclone for the two-device sync test (docs/adr/0022)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/rclone.zip" https://github.com/rclone/rclone/releases/download/v1.75.1/rclone-v1.75.1-linux-amd64.zip
+          echo "982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab  $RUNNER_TEMP/rclone.zip" | sha256sum -c -
+          unzip -q -j "$RUNNER_TEMP/rclone.zip" '*/rclone' -d "$RUNNER_TEMP"
+          echo "QP_RCLONE=$RUNNER_TEMP/rclone" >> "$GITHUB_ENV"
       - name: test
         run: go test ./... -count=1
 
@@ -71,3 +77,14 @@ jobs:
       - name: Windows accepts the repeating Scheduled Task
         shell: pwsh
         run: go test ./internal/agent -run TestWindowsAcceptsTheRepeatingTask -count=1 -v
+      - name: The marker, hidden on Windows, and two devices syncing through rclone (docs/adr/0022)
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "rclone.zip"
+          Invoke-WebRequest -Uri https://github.com/rclone/rclone/releases/download/v1.75.1/rclone-v1.75.1-windows-amd64.zip -OutFile $zip
+          $sum = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($sum -ne "200eb602c126d82aa38b51e0f6b9ae837473ff99b51278d3f6f837574c494d6e") { throw "rclone zip checksum: $sum" }
+          Expand-Archive $zip -DestinationPath $env:RUNNER_TEMP
+          $env:QP_RCLONE = (Get-ChildItem -Path $env:RUNNER_TEMP -Recurse -Filter rclone.exe | Select-Object -First 1).FullName
+          go test ./internal/agent -run 'TestEnsureMarker|TestEveryDeviceWritesTheSameMarker|TestAMarkerFromTheHubIsHiddenOnWindows|TestARefusal|TestTwoDevicesSyncASharedFolderThroughRclone' -count=1 -v
+          if ($LASTEXITCODE -ne 0) { throw "marker tests failed" }

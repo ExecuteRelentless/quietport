@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -773,5 +776,276 @@ func TestStoppingOneFoldersWatchLeavesTheOthers(t *testing.T) {
 	w.RemoveRoot(shared)
 	if !slices.Contains(w.w.WatchList(), shared2) || w.slugFor(filepath.Join(shared2, "x.txt")) != "b" {
 		t.Errorf("stopping Shared stopped Shared 2: %v", w.w.WatchList())
+	}
+}
+
+// Every device writes the same marker, byte for byte and to the second (docs/adr/0022). Each device used to stamp
+// its marker with the moment it wrote it. In a folder holding nothing else, the second member's first full sync then
+// replaced the marker on the hub, and the first member's device saw the folder's only file changed: rclone refuses a
+// bisync in which every file changed, so that device stopped syncing the folder. A marker already in a folder is left
+// as it is: it is the copy the hub has, and changing it is a change bisync counts like any other.
+func TestEveryDeviceWritesTheSameMarker(t *testing.T) {
+	first, second := t.TempDir(), t.TempDir()
+	ensureMarker(first)
+	time.Sleep(20 * time.Millisecond)
+	ensureMarker(second)
+	a, errA := os.Stat(filepath.Join(first, MarkerFile))
+	b, errB := os.Stat(filepath.Join(second, MarkerFile))
+	if errA != nil || errB != nil {
+		t.Fatalf("markers not written: %v %v", errA, errB)
+	}
+	if !a.ModTime().Equal(b.ModTime()) || a.Size() != b.Size() {
+		t.Fatalf("two devices wrote different markers: %v %d and %v %d", a.ModTime(), a.Size(), b.ModTime(), b.Size())
+	}
+	synced := time.Date(2026, 9, 13, 4, 36, 41, 0, time.UTC)
+	_ = os.Chtimes(filepath.Join(second, MarkerFile), synced, synced)
+	ensureMarker(second)
+	if st, _ := os.Stat(filepath.Join(second, MarkerFile)); !st.ModTime().Equal(synced) {
+		t.Errorf("a marker already in the folder was re-stamped: %v", st.ModTime())
+	}
+}
+
+func markerListings(t *testing.T, names ...string) string {
+	t.Helper()
+	work := t.TempDir()
+	lst := "# bisync listing v1 from 2026-09-13T04:37:18.000000000+0000\n"
+	for _, name := range names {
+		lst += fmt.Sprintf("-       83 - - 2026-09-13T04:36:41.000000000+0000 %q\n", name)
+	}
+	for _, side := range []string{"path1", "path2"} {
+		if err := os.WriteFile(filepath.Join(work, "Users_pat_QPSync_Shared..QPCRYPT_."+side+".lst"), []byte(lst), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return work
+}
+
+const refusedOverEveryFile = "2026/09/13 22:09:04 ERROR : Safety abort: all files were changed on Path2 \"QPCRYPT:\". Run with --force if desired.\n" +
+	"2026/09/13 22:09:04 NOTICE: Bisync aborted. Please try again.\n2026/09/13 22:09:04 NOTICE: Failed to bisync: all files were changed\n"
+
+// A refusal because every file changed is about the marker alone only when every listing bisync kept from its last
+// good run knew of nothing but the marker (docs/adr/0022). With any file in the last listing the refusal stands: it is
+// rclone's guard against a folder whose every file was replaced.
+func TestARefusalIsOverTheMarkerAloneOnlyWhenTheLastSyncKnewNothingElse(t *testing.T) {
+	if !refusalOverTheMarkerAlone(refusedOverEveryFile, markerListings(t, MarkerFile)) {
+		t.Error("refused, and the last listing knew only the marker")
+	}
+	if refusalOverTheMarkerAlone(refusedOverEveryFile, markerListings(t, MarkerFile, "budget.xlsx")) {
+		t.Error("refused with a file in the last listing: the guard stands")
+	}
+	if refusalOverTheMarkerAlone("2026/09/13 NOTICE: Failed to bisync: empty prior Path1 listing\n", markerListings(t, MarkerFile)) {
+		t.Error("another failure is not this one")
+	}
+	stale := markerListings(t, MarkerFile)
+	_ = os.WriteFile(filepath.Join(stale, "Users_pat_QPSync_Old..QPCRYPT_.path2.lst"), []byte("# bisync listing v1\n-       6 - - 2026-09-01T00:00:00.000000000+0000 \"notes.txt\"\n"), 0o600)
+	if refusalOverTheMarkerAlone(refusedOverEveryFile, stale) {
+		t.Error("any listing kept for the folder that knows of a file rules it out")
+	}
+	if refusalOverTheMarkerAlone(refusedOverEveryFile, t.TempDir()) {
+		t.Error("no listing at all rules it out")
+	}
+}
+
+// A bisync refused over the marker alone takes a full sync in the same cycle, and that full sync keeps the hub's copy
+// where the two differ (docs/adr/0022). So a device never pushes its own marker at the others: the hub's marker
+// only changes when a folder's first full sync on a device, or a 0.1.25 device, puts one there, and every 0.1.26
+// device simply takes it. The cycle's result is the full sync's, so a healed folder is not a failure.
+func TestARefusalOverTheMarkerAloneIsSettledInTheSameCycleKeepingTheHubsCopy(t *testing.T) {
+	type call struct{ resync string }
+	runner := func(results ...Result) (func(string) Result, *[]call) {
+		var calls []call
+		return func(resync string) Result {
+			calls = append(calls, call{resync})
+			r := results[0]
+			results = results[1:]
+			return r
+		}, &calls
+	}
+	refused, synced := Result{Output: refusedOverEveryFile}, Result{OK: true}
+
+	run, calls := runner(refused, synced)
+	if res, healed := bisyncHealingTheMarker(run, false, markerListings(t, MarkerFile)); !res.OK || !healed ||
+		!slices.Equal(*calls, []call{{noResync}, {resyncKeepHub}}) {
+		t.Errorf("refused over the marker: ok %v, healed %v, calls %v", res.OK, healed, *calls)
+	}
+	run, calls = runner(refused)
+	if res, healed := bisyncHealingTheMarker(run, false, markerListings(t, MarkerFile, "budget.xlsx")); res.OK || healed || len(*calls) != 1 {
+		t.Errorf("refused with a file in the listing: ok %v, healed %v, calls %v", res.OK, healed, *calls)
+	}
+	run, calls = runner(refused)
+	if _, healed := bisyncHealingTheMarker(run, true, markerListings(t, MarkerFile)); healed || !slices.Equal(*calls, []call{{resyncThisDevice}}) {
+		t.Errorf("a cycle that is already a full sync: healed %v, calls %v", healed, *calls)
+	}
+	run, calls = runner(synced)
+	if res, healed := bisyncHealingTheMarker(run, false, markerListings(t, MarkerFile)); !res.OK || healed || len(*calls) != 1 {
+		t.Errorf("a cycle that synced: ok %v, healed %v, calls %v", res.OK, healed, *calls)
+	}
+}
+
+// Two devices share a folder through rclone itself (docs/adr/0022). Set QP_RCLONE to an rclone 1.75 binary to run
+// it; CI downloads one. The hub's bucket is stood in for by a local directory, which keeps modification times as the
+// crypt remote does. A 0.1.26 cycle is the agent's own bisyncHealingTheMarker over its own bisyncArgs. A 0.1.25 cycle
+// stamps its marker when it writes it and, after three refusals, takes a full sync that keeps its own copy.
+func TestTwoDevicesSyncASharedFolderThroughRclone(t *testing.T) {
+	bin := os.Getenv("QP_RCLONE")
+	if bin == "" {
+		t.Skip("set QP_RCLONE to an rclone binary to run the two-device sync")
+	}
+	t.Setenv("HOME", t.TempDir())
+	type device struct {
+		name, dir, work string
+		legacy          bool      // runs 0.1.25
+		stamp           time.Time // the time a 0.1.25 device writes on its marker
+		full            bool      // the next cycle is a full sync
+		refusals        int       // consecutive failures, for 0.1.25's three-refusal rule
+	}
+	var hub string
+	pair := func() (pat, sam *device) {
+		// bisync names its listing files after both paths, so the paths stay short or the names pass the limit
+		base, err := os.MkdirTemp(filepath.Join(string(os.PathSeparator), "tmp"), "qp")
+		if runtime.GOOS == "windows" || err != nil {
+			base, err = os.MkdirTemp("", "qp")
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(base) })
+		hub = filepath.Join(base, "bucket") + string(os.PathSeparator)
+		_ = os.MkdirAll(hub, 0o755)
+		mk := func(name string, stamp time.Time) *device {
+			d := &device{name: name, dir: filepath.Join(base, name, "Shared"), work: filepath.Join(base, name, "bisync"), stamp: stamp, full: true}
+			_ = os.MkdirAll(d.dir, 0o755)
+			_ = os.MkdirAll(d.work, 0o700)
+			return d
+		}
+		return mk("pat", time.Now().Add(-time.Hour)), mk("sam", time.Now())
+	}
+	rclone := func(d *device, resync string) Result {
+		cmd := exec.Command(bin, bisyncArgs(CircleState{}, d.dir, hub, d.work, resync)...)
+		cmd.Env = append(os.Environ(), "RCLONE_CONFIG="+os.DevNull)
+		out, err := cmd.CombinedOutput()
+		return Result{OK: err == nil, Err: err, Output: string(out)}
+	}
+	cycle := func(d *device) (res Result, healed bool) {
+		if d.legacy {
+			p := filepath.Join(d.dir, MarkerFile)
+			if _, err := os.Stat(p); os.IsNotExist(err) {
+				_ = os.WriteFile(p, []byte(markerText), 0o644)
+				_ = os.Chtimes(p, d.stamp, d.stamp)
+			}
+			resync := noResync
+			if d.full || d.refusals >= 3 {
+				resync = resyncThisDevice
+			}
+			res = rclone(d, resync)
+		} else {
+			ensureMarker(d.dir)
+			res, healed = bisyncHealingTheMarker(func(resync string) Result { return rclone(d, resync) }, d.full, d.work)
+		}
+		if res.OK {
+			d.full, d.refusals = false, 0
+		} else {
+			d.refusals++
+		}
+		return res, healed
+	}
+	mustSync := func(d *device, why string) {
+		t.Helper()
+		if res, _ := cycle(d); !res.OK {
+			t.Fatalf("%s: %s did not sync: %v\n%s", why, d.name, res.Err, res.Output)
+		}
+	}
+	// both devices keep taking turns until neither is refused for three rounds in a row; a pair that cannot get
+	// there within the rounds given is the loop this test exists for
+	settle := func(pat, sam *device, rounds int, why string) {
+		t.Helper()
+		clean := 0
+		for i := 0; i < rounds && clean < 3; i++ {
+			a, _ := cycle(pat)
+			b, _ := cycle(sam)
+			if a.OK && b.OK {
+				clean++
+			} else {
+				clean = 0
+			}
+		}
+		if clean < 3 {
+			t.Fatalf("%s: the two devices never settled in %d rounds", why, rounds)
+		}
+	}
+	has := func(d *device, name, want string) {
+		t.Helper()
+		if b, err := os.ReadFile(filepath.Join(d.dir, name)); err != nil || string(b) != want {
+			t.Fatalf("%s: %s is %q, %v; want %q", d.name, name, b, err, want)
+		}
+	}
+	stuckPair := func() (pat, sam *device) {
+		pat, sam = pair()
+		pat.legacy, sam.legacy = true, true
+		mustSync(pat, "Pat starts the folder")
+		mustSync(sam, "Sam joins")
+		if res, _ := cycle(pat); res.OK || !strings.Contains(res.Output, "all files were changed") {
+			t.Fatalf("0.1.25 should leave Pat stuck, got %v\n%s", res.Err, res.Output)
+		}
+		return pat, sam
+	}
+
+	// shared on 0.1.26: nobody is refused and nothing needs healing
+	pat, sam := pair()
+	mustSync(pat, "Pat starts the folder")
+	time.Sleep(1100 * time.Millisecond) // written a second later, as a second device's marker always is
+	mustSync(sam, "Sam joins")
+	for i := 0; i < 2; i++ {
+		for _, d := range []*device{pat, sam} {
+			if res, healed := cycle(d); !res.OK || healed {
+				t.Fatalf("after the join: %s ok %v, healed %v\n%s", d.name, res.OK, healed, res.Output)
+			}
+		}
+	}
+	_ = os.WriteFile(filepath.Join(sam.dir, "plan.txt"), []byte("from sam"), 0o644)
+	mustSync(sam, "Sam adds a file")
+	mustSync(pat, "Pat picks it up")
+	has(pat, "plan.txt", "from sam")
+
+	// a 0.1.25 device's folder, joined from 0.1.26
+	pat, sam = pair()
+	pat.legacy = true
+	mustSync(pat, "Pat starts the folder on 0.1.25")
+	mustSync(sam, "Sam joins on 0.1.26")
+	settle(pat, sam, 12, "a 0.1.25 folder joined from 0.1.26")
+
+	// stuck on 0.1.25 with nothing in the folder, then both update
+	pat, sam = stuckPair()
+	pat.legacy, sam.legacy = false, false
+	settle(pat, sam, 4, "stuck and empty, both on 0.1.26")
+
+	// stuck on 0.1.25, the stuck device's member adds a file, then both update
+	pat, sam = stuckPair()
+	_ = os.WriteFile(filepath.Join(pat.dir, "added while stuck.txt"), []byte("from pat"), 0o644)
+	pat.legacy, sam.legacy = false, false
+	settle(pat, sam, 4, "stuck with a file, both on 0.1.26")
+	has(sam, "added while stuck.txt", "from pat")
+
+	// stuck on 0.1.25; only the device that is not stuck updates: it must not keep the other one stuck
+	pat, sam = stuckPair()
+	sam.legacy = false
+	settle(pat, sam, 12, "only the device holding the newer marker updated")
+
+	// syncing on 0.1.25 with one file; Pat's member deletes it, then both update: the delete reaches Sam
+	pat, sam = pair()
+	pat.legacy, sam.legacy = true, true
+	mustSync(pat, "Pat starts the folder")
+	_ = os.WriteFile(filepath.Join(pat.dir, "last file.txt"), []byte("x"), 0o644)
+	mustSync(pat, "Pat adds a file")
+	mustSync(sam, "Sam joins")
+	mustSync(pat, "Pat after the join")
+	has(sam, "last file.txt", "x")
+	_ = os.Remove(filepath.Join(pat.dir, "last file.txt"))
+	pat.legacy, sam.legacy = false, false
+	settle(pat, sam, 4, "a delete just before the update")
+	for _, d := range []*device{pat, sam} {
+		if _, err := os.Stat(filepath.Join(d.dir, "last file.txt")); !os.IsNotExist(err) {
+			t.Errorf("%s: the deleted file came back", d.name)
+		}
 	}
 }

@@ -119,10 +119,8 @@ var (
 	rePathLine    = regexp.MustCompile(`(ERROR|NOTICE|INFO)\s*:\s*(.+?):\s`)
 )
 
-// Sync runs one cycle for a circle in the mode that applies to this member (FR-7).
-func (r *Rclone) Sync(ctx context.Context, cs CircleState, key model.CircleKey, ak, sk, endpoint string, mode string, resync bool) Result {
-	local := cs.Dir()
-	_ = os.MkdirAll(local, 0o755)
+// commonArgs: the flags every sync mode shares.
+func commonArgs(cs CircleState) []string {
 	stamp := time.Now().Format("2006-01-02T15-04-05")
 	common := []string{"--stats", "0", "--log-level", "NOTICE", "--transfers", "2", "--checkers", "8", "--retries", "3", "--low-level-retries", "20",
 		"--suffix", "." + stamp, "--suffix-keep-extension", "--use-json-log=false", "--fast-list=false", "--modify-window", "1s", "--color", "never"}
@@ -138,22 +136,49 @@ func (r *Rclone) Sync(ctx context.Context, cs CircleState, key model.CircleKey, 
 	if cs.BwLimit != "" {
 		common = append(common, "--bwlimit", cs.BwLimit) // FR-38 (timetable syntax works here)
 	}
+	return common
+}
+
+// bisyncWorkDir holds a circle's bisync listings on this device.
+func bisyncWorkDir(cs CircleState) string { return filepath.Join(BisyncDir(), cs.Slug) }
+
+// bisyncArgs: one two-way cycle between a folder and its remote, keeping listings in work (FR-30/33).
+func bisyncArgs(cs CircleState, local, remote, work string, resync string) []string {
+	args := append([]string{"bisync", local, remote, "--workdir", work, "--resilient", "--recover", "--max-lock", "2m",
+		"--conflict-resolve", "newer", "--conflict-loser", "delete", "--conflict-suffix", "qpconflict",
+		"--backup-dir1", filepath.Join(local, VersionsDir), "--backup-dir2", remote + VersionsDir,
+		"--max-delete", "100", "--create-empty-src-dirs", "--compare", "size,modtime"}, commonArgs(cs)...)
+	switch resync {
+	case resyncThisDevice:
+		args = append(args, "--resync")
+	case resyncKeepHub:
+		args = append(args, "--resync-mode", "path2")
+	}
+	return args
+}
+
+// How a sync cycle runs: as a normal bisync, or as a full sync (a resync) that, where both sides have a file and
+// they differ, keeps this device's copy or the hub's.
+const (
+	noResync         = ""
+	resyncThisDevice = "path1"
+	resyncKeepHub    = "path2" // docs/adr/0022
+)
+
+// Sync runs one cycle for a circle in the mode that applies to this member (FR-7).
+func (r *Rclone) Sync(ctx context.Context, cs CircleState, key model.CircleKey, ak, sk, endpoint string, mode string, resync string) Result {
+	local := cs.Dir()
+	_ = os.MkdirAll(local, 0o755)
 	var args []string
 	switch mode {
 	case "pull":
-		args = append([]string{"sync", cryptRemote, local, "--backup-dir", filepath.Join(local, VersionsDir)}, common...)
+		args = append([]string{"sync", cryptRemote, local, "--backup-dir", filepath.Join(local, VersionsDir)}, commonArgs(cs)...)
 	case "push":
-		args = append([]string{"sync", local, cryptRemote, "--backup-dir", cryptRemote + VersionsDir}, common...)
+		args = append([]string{"sync", local, cryptRemote, "--backup-dir", cryptRemote + VersionsDir}, commonArgs(cs)...)
 	default: // bisync (FR-30/33)
-		work := filepath.Join(BisyncDir(), cs.Slug)
+		work := bisyncWorkDir(cs)
 		_ = os.MkdirAll(work, 0o700)
-		args = append([]string{"bisync", local, cryptRemote, "--workdir", work, "--resilient", "--recover", "--max-lock", "2m",
-			"--conflict-resolve", "newer", "--conflict-loser", "delete", "--conflict-suffix", "qpconflict",
-			"--backup-dir1", filepath.Join(local, VersionsDir), "--backup-dir2", cryptRemote + VersionsDir,
-			"--max-delete", "100", "--create-empty-src-dirs", "--compare", "size,modtime"}, common...)
-		if resync {
-			args = append(args, "--resync")
-		}
+		args = bisyncArgs(cs, local, cryptRemote, work, resync)
 	}
 	start := time.Now()
 	cmd := commandContext(ctx, r.bin, args...)

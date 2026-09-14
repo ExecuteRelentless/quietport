@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -280,7 +281,16 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 	if mode != "pull" {
 		ensureMarker(c.Dir())
 	}
-	res := a.rc.Sync(ctx, c, key, ak, sk, cfg.S3Endpoint, mode, c.Resync)
+	run := func(resync string) Result { return a.rc.Sync(ctx, c, key, ak, sk, cfg.S3Endpoint, mode, resync) }
+	var res Result
+	if mode == "bisync" {
+		var healed bool
+		if res, healed = bisyncHealingTheMarker(run, c.Resync, bisyncWorkDir(c)); healed {
+			a.logf("%s: the folder's marker had changed on the hub and the last sync knew of nothing else, so this cycle took a full sync keeping the hub's copy", c.Slug)
+		}
+	} else {
+		res = run(noResync)
+	}
 	// rclone 1.75 aborts a bisync whose prior listing has no files ("empty prior Path1 listing"), which is exactly the
 	// state of a folder nobody has put anything in yet. Nothing is corrupt: run the next cycle as a full sync (copies
 	// both ways, deletes nothing), and do not count it as a failure.
@@ -288,13 +298,7 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 	if emptyListing {
 		if !c.Resync {
 			a.logf("%s: folder was empty at the last sync, next cycle is a full sync", c.Slug)
-			_ = a.store.Update(func(cf *Config) {
-				for i := range cf.Circles {
-					if cf.Circles[i].Slug == c.Slug {
-						cf.Circles[i].Resync = true
-					}
-				}
-			})
+			a.setResync(c.Slug, true)
 		}
 		return
 	}
@@ -307,13 +311,7 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 		h.Failures = 0
 		a.st.LastSyncOK = time.Now()
 		if c.Resync {
-			_ = a.store.Update(func(cf *Config) {
-				for i := range cf.Circles {
-					if cf.Circles[i].Slug == c.Slug {
-						cf.Circles[i].Resync = false
-					}
-				}
-			})
+			a.setResync(c.Slug, false)
 		}
 	} else {
 		a.st.ErrorCount++
@@ -333,13 +331,7 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 		if res.NeedsResync && mode == "bisync" && !c.Resync {
 			a.logf("%s: bisync state unusable, scheduling a full resync", c.Slug) // §9 corrupt bisync state
 			a.addCondition("corrupt_state:" + c.Slug)
-			_ = a.store.Update(func(cf *Config) {
-				for i := range cf.Circles {
-					if cf.Circles[i].Slug == c.Slug {
-						cf.Circles[i].Resync = true
-					}
-				}
-			})
+			a.setResync(c.Slug, true)
 		}
 	}
 	a.st.Circles[c.Slug] = h
@@ -744,16 +736,93 @@ func (a *Agent) longPaths(ctx context.Context) {
 	}
 }
 
-// ensureMarker keeps a small hidden file in every folder so its listing is never empty (see MarkerFile).
+// setResync records whether the circle's next cycle is a full sync.
+func (a *Agent) setResync(slug string, on bool) {
+	_ = a.store.Update(func(cf *Config) {
+		for i := range cf.Circles {
+			if cf.Circles[i].Slug == slug {
+				cf.Circles[i].Resync = on
+			}
+		}
+	})
+}
+
+// markerTime is the modification time of every new marker on every device (docs/adr/0022). A marker stamped with the
+// moment each device wrote it differs between devices, and in a folder holding nothing else the second member's
+// first full sync replaced it on the hub, after which rclone refused every sync on the first member's device because
+// all of that folder's files had changed.
+var markerTime = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+
+const markerText = "Quietport keeps this file here so the folder stays in sync even while it is empty.\n"
+
+// ensureMarker keeps the marker in a folder. A new marker is the same file on every device, time included; a marker
+// already there keeps its content and time, because it is the copy the hub has and a change to it is a change bisync
+// counts. It is hidden again on Windows, where one that arrived in a sync was written as an ordinary file.
 func ensureMarker(dir string) {
 	p := filepath.Join(dir, MarkerFile)
 	if _, err := os.Stat(p); err == nil {
+		hideFile(p)
 		return
 	}
 	if _, err := os.Stat(dir); err != nil {
 		return // folder not there yet (or gone); nothing to mark
 	}
-	if err := os.WriteFile(p, []byte("Quietport keeps this file here so the folder stays in sync even while it is empty.\n"), 0o644); err == nil {
+	if err := os.WriteFile(p, []byte(markerText), 0o644); err == nil {
+		_ = os.Chtimes(p, markerTime, markerTime)
 		hideFile(p)
 	}
+}
+
+// bisyncHealingTheMarker runs one bisync cycle through run, as a full sync keeping this device's copy when resync is
+// set. When rclone refuses the cycle over the marker alone it runs a full sync keeping the hub's copy at once, and
+// that result is the cycle's (docs/adr/0022). A device therefore never pushes its own marker at the others: every
+// 0.1.26 device takes the hub's.
+func bisyncHealingTheMarker(run func(resync string) Result, resync bool, work string) (res Result, healed bool) {
+	if resync {
+		return run(resyncThisDevice), false
+	}
+	if res = run(noResync); res.OK || !refusalOverTheMarkerAlone(res.Output, work) {
+		return res, false
+	}
+	return run(resyncKeepHub), true
+}
+
+// refusalOverTheMarkerAlone: rclone refused a bisync because every file changed, and every listing it kept from its
+// last good run knew of nothing but the marker (docs/adr/0022). The refusal can then only be about the marker, which
+// a full sync elsewhere replaced on the hub, and a full sync has nothing it could delete or bring back: it sends up
+// what the member added since and brings down what others added.
+func refusalOverTheMarkerAlone(output, work string) bool {
+	return strings.Contains(output, "all files were changed") && listingsKnowOnlyTheMarker(work)
+}
+
+// listingsKnowOnlyTheMarker: bisync's listings in work exist and name no file but the marker. A listing that cannot
+// be read or parsed counts as knowing more.
+func listingsKnowOnlyTheMarker(work string) bool {
+	var lists []string
+	for _, side := range []string{"*.path1.lst", "*.path2.lst"} {
+		m, _ := filepath.Glob(filepath.Join(work, side))
+		lists = append(lists, m...)
+	}
+	if len(lists) == 0 {
+		return false
+	}
+	for _, l := range lists {
+		b, err := os.ReadFile(l)
+		if err != nil {
+			return false
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			i := strings.IndexByte(line, '"')
+			if i < 0 {
+				return false
+			}
+			if name, err := strconv.Unquote(line[i:]); err != nil || name != MarkerFile {
+				return false
+			}
+		}
+	}
+	return true
 }
