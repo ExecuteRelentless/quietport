@@ -241,7 +241,7 @@ func (h *Hub) opCircleCreate(w http.ResponseWriter, r *http.Request) {
 	// every member's computer makes a directory of this name (docs/adr/0020)
 	in.Name = model.FolderName(in.Name)
 	if err != nil || !slugRe.MatchString(in.Slug) || in.Name == "" {
-		writeErr(w, 400, "slug must be lowercase letters, digits and dashes; name is required and must not be only dots, spaces or slashes")
+		writeErr(w, 400, "slug must be lowercase letters, digits and dashes; name is required and must have something in it besides dots and spaces")
 		return
 	}
 	if h.gar == nil {
@@ -323,7 +323,7 @@ func (h *Hub) opCircleUpdate(w http.ResponseWriter, r *http.Request) {
 	if set("name", &name) {
 		// every member's computer makes a directory of this name (docs/adr/0020)
 		if name = model.FolderName(name); name == "" {
-			writeErr(w, 400, "a folder name must not be only dots, spaces or slashes")
+			writeErr(w, 400, "a folder name must have something in it besides dots and spaces")
 			return
 		}
 		c.DisplayName = name

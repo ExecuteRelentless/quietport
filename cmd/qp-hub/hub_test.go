@@ -449,8 +449,8 @@ func TestPreAuthKeyExpireUsesOnlyTheIDFlag(t *testing.T) {
 }
 
 // Every member's computer makes a directory from a folder's name, so the hub keeps only names that are names
-// (docs/adr/0020): a folder called ".." would be each member's home directory. A name made only of dots, spaces and
-// separators is refused wherever a name is set; anything else is stored as the directory it will become, so what a
+// (docs/adr/0020): a folder called ".." would be each member's home directory. A name made only of dots and spaces is
+// refused wherever a name is set; anything else is stored as the directory it will become, so what a
 // member reads is the folder they find.
 func TestFolderNamesThatAreNotNamesAreRefused(t *testing.T) {
 	db, err := hubdb.Open(filepath.Join(t.TempDir(), "hub.db"))
