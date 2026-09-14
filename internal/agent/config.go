@@ -181,18 +181,10 @@ func SaveState(st State) {
 
 func CircleDir(displayName string) string { return filepath.Join(SyncRoot(), safeName(displayName)) }
 
+// safeName is the directory a folder's name becomes under the sync root (docs/adr/0020).
 func safeName(s string) string {
-	out := []rune{}
-	for _, r := range s {
-		switch r {
-		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
-			out = append(out, '-')
-		default:
-			out = append(out, r)
-		}
+	if name := model.FolderName(s); name != "" {
+		return name
 	}
-	if len(out) == 0 {
-		return "Shared"
-	}
-	return string(out)
+	return "Shared"
 }

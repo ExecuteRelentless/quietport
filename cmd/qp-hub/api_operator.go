@@ -237,8 +237,11 @@ func (h *Hub) opCircleCreate(w http.ResponseWriter, r *http.Request) {
 		Retention                          int
 		Excludes                           []string
 	}
-	if err := readJSON(r, &in); err != nil || !slugRe.MatchString(in.Slug) || in.Name == "" {
-		writeErr(w, 400, "slug must be lowercase letters, digits and dashes; name is required")
+	err := readJSON(r, &in)
+	// every member's computer makes a directory of this name (docs/adr/0020)
+	in.Name = model.FolderName(in.Name)
+	if err != nil || !slugRe.MatchString(in.Slug) || in.Name == "" {
+		writeErr(w, 400, "slug must be lowercase letters, digits and dashes; name is required and must not be only dots, spaces or slashes")
 		return
 	}
 	if h.gar == nil {
@@ -316,7 +319,15 @@ func (h *Hub) opCircleUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		return json.Unmarshal(raw, v) == nil
 	}
-	set("name", &c.DisplayName)
+	var name string
+	if set("name", &name) {
+		// every member's computer makes a directory of this name (docs/adr/0020)
+		if name = model.FolderName(name); name == "" {
+			writeErr(w, 400, "a folder name must not be only dots, spaces or slashes")
+			return
+		}
+		c.DisplayName = name
+	}
 	set("mode", &c.SyncMode)
 	set("retention", &c.VersionRetentionDays)
 	set("excludes", &c.Excludes)

@@ -485,3 +485,42 @@ func TestJoinKeepsTheFoldersAlreadyOnThisComputer(t *testing.T) {
 		t.Errorf("a folder without its key: %+v", c2.Circles)
 	}
 }
+
+// A folder's name is typed by whoever started the folder, and every member's computer turns it into a directory
+// (docs/adr/0020). A folder called ".." was the member's home directory, synced to everyone in the folder, and "."
+// was the sync root with every other folder in it. No name may leave the sync root, be the sync root, hide, or name
+// a Windows device; a name that is nothing but such characters becomes "Shared", the name signup gives by default.
+func TestAFolderNameNeverLeavesTheSyncRoot(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	for name, want := range map[string]string{
+		"..":                 "Shared",
+		".":                  "Shared",
+		"...":                "Shared",
+		". .":                "Shared",
+		" .. ":               "Shared",
+		"":                   "Shared",
+		"   ":                "Shared",
+		"\x00":               "Shared",
+		"../..":              "-",
+		`..\..`:              "-",
+		"a/../../b":          "a-..-..-b",
+		".config":            "config",
+		"Photos.":            "Photos",
+		"Photos ":            "Photos",
+		"x\x01y":             "xy",
+		"CON":                "Folder CON",
+		"nul":                "Folder nul",
+		"Com1":               "Folder Com1",
+		"lpt9.txt":           "Folder lpt9.txt",
+		"CONOUT$":            "Folder CONOUT$",
+		"Console":            "Console",
+		"Trip":               "Trip",
+		"Mum's photos: 2026": "Mum's photos- 2026",
+		"Famille été":        "Famille été",
+	} {
+		dir := CircleDir(name)
+		if got := filepath.Base(dir); got != want || filepath.Dir(dir) != SyncRoot() {
+			t.Errorf("folder %q lands in %s, want %s", name, dir, filepath.Join(SyncRoot(), want))
+		}
+	}
+}

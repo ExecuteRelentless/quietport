@@ -22,3 +22,4 @@ A decision is superseded by adding a new record, never by editing the old one.
 - [0017 On Windows the agent is a GUI program, and its Scheduled Task repeats](0017-windows-agent-is-a-gui-program.md)
 - [0018 Every program the agent starts is built by one constructor](0018-one-constructor-for-every-child-process.md)
 - [0019 A link opened on a computer that already has Quietport joins, it never reinstalls](0019-a-link-joins-an-existing-install.md)
+- [0020 A folder's name is a directory name, checked on the hub and again on every computer](0020-a-folder-name-is-a-directory-name.md)

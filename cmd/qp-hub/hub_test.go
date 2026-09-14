@@ -447,3 +447,65 @@ func TestPreAuthKeyExpireUsesOnlyTheIDFlag(t *testing.T) {
 		t.Fatalf("args: %q", got)
 	}
 }
+
+// Every member's computer makes a directory from a folder's name, so the hub keeps only names that are names
+// (docs/adr/0020): a folder called ".." would be each member's home directory. A name made only of dots, spaces and
+// separators is refused wherever a name is set; anything else is stored as the directory it will become, so what a
+// member reads is the folder they find.
+func TestFolderNamesThatAreNotNamesAreRefused(t *testing.T) {
+	db, err := hubdb.Open(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	h := &Hub{db: db}
+	p, _ := db.PersonAdd(model.Person{Name: "sam-k3q7", DisplayName: "Sam", HSUser: "sam-k3q7"})
+	dev := model.Device{ID: 7, PersonID: p.ID}
+	post := func(handler func(http.ResponseWriter, *http.Request), path, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		handler(rec, req)
+		return rec
+	}
+	member := func(w http.ResponseWriter, r *http.Request) { h.handleDeviceCircleCreate(w, r, dev) }
+	_ = db.SetSetting("open_signup", "1")
+	for _, bad := range []string{"..", ".", " . . ", "..."} {
+		body, _ := json.Marshal(map[string]string{"name": bad})
+		if rec := post(member, "/v1/circles", string(body)); rec.Code != 400 {
+			t.Errorf("member folder %q: %d %s", bad, rec.Code, rec.Body)
+		}
+		body, _ = json.Marshal(map[string]string{"name": "Sam", "folder": bad})
+		if rec := post(h.selfStart, "/j/new", string(body)); rec.Code != 400 {
+			t.Errorf("signup folder %q: %d %s", bad, rec.Code, rec.Body)
+		}
+		body, _ = json.Marshal(map[string]string{"slug": "trip", "name": bad})
+		if rec := post(h.opCircleCreate, "/v1/op/circles", string(body)); rec.Code != 400 {
+			t.Errorf("operator folder %q: %d %s", bad, rec.Code, rec.Body)
+		}
+	}
+	c, err := db.CircleCreate(model.Circle{Slug: "trip-x2a4", DisplayName: "Trip", BucketPrefix: "qp-trip-x2a4"}, "AK", "SK")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rename := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("PATCH", "/v1/op/circles/"+c.Slug, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.SetPathValue("slug", c.Slug)
+		h.opCircleUpdate(rec, req)
+		return rec
+	}
+	if rec := rename(`{"name":".."}`); rec.Code != 400 {
+		t.Errorf("renaming a folder to ..: %d %s", rec.Code, rec.Body)
+	}
+	if got, _ := db.CircleBySlug(c.Slug); got.DisplayName != "Trip" {
+		t.Errorf("a refused rename changed the name to %q", got.DisplayName)
+	}
+	if rec := rename(`{"name":"  Summer: 2026. "}`); rec.Code != 200 {
+		t.Fatalf("a real name was refused: %d %s", rec.Code, rec.Body)
+	}
+	if got, _ := db.CircleBySlug(c.Slug); got.DisplayName != "Summer- 2026" {
+		t.Errorf("stored %q, want the directory name a member's computer will make", got.DisplayName)
+	}
+}

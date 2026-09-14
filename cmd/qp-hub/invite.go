@@ -336,8 +336,10 @@ func (h *Hub) selfStart(w http.ResponseWriter, r *http.Request) {
 	if len(name) > 40 {
 		name = name[:40]
 	}
-	if len(folder) > 40 {
-		folder = folder[:40]
+	// every member's computer makes a directory of this name (docs/adr/0020)
+	if folder = model.FolderName(folder); folder == "" {
+		writeErr(w, 400, "Give the folder a name.")
+		return
 	}
 	if h.gar == nil {
 		writeErr(w, 500, "storage not configured")

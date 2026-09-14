@@ -662,13 +662,11 @@ func (h *Hub) handleDeviceCircleCreate(w http.ResponseWriter, r *http.Request, d
 		writeErr(w, 400, "bad request")
 		return
 	}
-	name := strings.TrimSpace(in.Name)
+	// every member's computer makes a directory of this name (docs/adr/0020)
+	name := model.FolderName(in.Name)
 	if name == "" {
 		writeErr(w, 400, "give the folder a name")
 		return
-	}
-	if len(name) > 40 {
-		name = name[:40]
 	}
 	person, err := h.db.PersonByID(dev.PersonID)
 	if err != nil || person.Status != model.StatusActive {
