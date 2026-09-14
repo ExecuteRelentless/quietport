@@ -436,3 +436,14 @@ func TestInvitePageTellsExistingMembersWhereToPasteTheLink(t *testing.T) {
 		}
 	}
 }
+
+// headscale 0.29's `preauthkeys expire` takes the key id and nothing else (its usage: "-i, --id uint   Authkey ID").
+// The wrapper also passed --user, so every call failed with "unknown flag: --user", and the failure was discarded
+// by `qpctl invite revoke` and offboarding until a join logged it (2026-09-13). A revoked invite's pre-auth key
+// therefore stayed usable on the mesh until its own expiry.
+func TestPreAuthKeyExpireUsesOnlyTheIDFlag(t *testing.T) {
+	got := strings.Join(preAuthKeyExpireArgs(80), " ")
+	if got != "preauthkeys expire --id 80" {
+		t.Fatalf("args: %q", got)
+	}
+}

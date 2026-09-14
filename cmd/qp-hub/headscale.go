@@ -90,9 +90,16 @@ func (h Headscale) PreAuthKeyCreate(userID int64, ttl time.Duration, tags []stri
 	return k, nil
 }
 
+// PreAuthKeyExpire expires one pre-auth key. headscale 0.29 identifies the key by id alone; userID is kept in the
+// signature for the callers' sake and is not sent (TestPreAuthKeyExpireUsesOnlyTheIDFlag).
 func (h Headscale) PreAuthKeyExpire(userID, keyID int64) error {
-	_, err := h.run("preauthkeys", "expire", "--user", strconv.FormatInt(userID, 10), "--id", strconv.FormatInt(keyID, 10))
+	_ = userID
+	_, err := h.run(preAuthKeyExpireArgs(keyID)...)
 	return err
+}
+
+func preAuthKeyExpireArgs(keyID int64) []string {
+	return []string{"preauthkeys", "expire", "--id", strconv.FormatInt(keyID, 10)}
 }
 
 type hsNode struct {
