@@ -40,9 +40,9 @@ deploy/               hub bootstrap, install and configure scripts, systemd unit
 installers/           icons, and qp-sidebar (Finder sidebar helper, Objective-C, universal binary + source)
 scripts/build.sh      cross-builds hub, client bundles and operator kit, signs the release
 scripts/build-installer.sh   builds, signs and notarizes the Mac app and DMG, embeds the client in the Windows and Linux installers
-.github/workflows     builds the Windows binaries from source on every tag; signs them through SignPath once configured
+.github/workflows     builds the Windows binaries from source on every tag; signs them once a signing service is configured
 docs/RUNBOOK.md       how to operate it
-docs/SIGNING.md       Windows code signing (SignPath Foundation, free for open source)
+docs/SIGNING.md       Windows code signing: what is signed, in what order, and the options
 ```
 
 ## Running your own hub
@@ -96,8 +96,8 @@ About 15 minutes on a small VM.
   `release.pub` is compiled into the client). `scripts/sign` creates one.
 - `installers/mac/qp-sidebar` is prebuilt from `qp-sidebar.m`:
   `clang -fobjc-arc -framework Foundation -framework CoreServices -arch arm64 -arch x86_64 -o qp-sidebar qp-sidebar.m`.
-- Windows binaries are unsigned until the SignPath signing job is configured (`docs/SIGNING.md`); SmartScreen shows
-  "More info / Run anyway" once and Defender may need a false-positive report in the meantime.
+- Windows binaries are unsigned. SignPath Foundation declined the project on 2026-09-14 for lack of public visibility, and
+  `docs/SIGNING.md` lists the paid options. The invite page and the site's FAQ tell members what to do when Windows warns.
 
 ## Working on the code
 

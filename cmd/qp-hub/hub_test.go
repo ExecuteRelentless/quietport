@@ -509,3 +509,54 @@ func TestFolderNamesThatAreNotNamesAreRefused(t *testing.T) {
 		t.Errorf("stored %q, want the directory name a member's computer will make", got.DisplayName)
 	}
 }
+
+// Windows warns about a program few people have installed, and Quietport is unsigned (SignPath Foundation declined on
+// 2026-09-14, docs/SIGNING.md). The Windows invite page says so in plain words and gives the way past each warning a
+// member meets: the browser's "not commonly downloaded", the blue SmartScreen box, and the PowerShell line when
+// Windows still stops the installer. The Mac page carries none of it.
+func TestTheWindowsInvitePageSaysWhatToDoWhenWindowsWarns(t *testing.T) {
+	render := func(os string) string {
+		var buf bytes.Buffer
+		d := invitePageData{OS: os, Host: "quietport.app", Code: "abc", Inviter: "Alex", Folder: "Trip", MacApp: true, WinApp: true}
+		if err := tmpl.ExecuteTemplate(&buf, "invite.html", d); err != nil {
+			t.Fatal(err)
+		}
+		return buf.String()
+	}
+	win := render("win")
+	for _, want := range []string{"Windows may warn you about Quietport", "isn't commonly downloaded", "<b>Keep</b>", "<b>Show more</b>", "<b>Keep anyway</b>",
+		"<b>Windows protected your PC</b>", "<b>More info</b>", "<b>Run anyway</b>", "<b>Other options</b>", "paste the PowerShell line instead"} {
+		if !strings.Contains(win, want) {
+			t.Errorf("Windows page lacks %q", want)
+		}
+	}
+	if strings.Contains(render("mac"), "Windows may warn you") {
+		t.Error("the Mac page carries the Windows warning")
+	}
+}
+
+// The site claimed a free SignPath signature on the Windows build that never existed. It now makes no signing claim,
+// and its Windows download points to a question that explains the warning and the way past it.
+func TestTheSiteExplainsTheWindowsWarningAndClaimsNoSignature(t *testing.T) {
+	site, err := fs.Sub(webFS, "web/site")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	(&Hub{site: site}).routesPublic(mux)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	page := rec.Body.String()
+	if rec.Code != 200 {
+		t.Fatalf("home page: %d", rec.Code)
+	}
+	if strings.Contains(page, "SignPath") || strings.Contains(strings.ToLower(page), "code signing for the windows build") {
+		t.Error("the site still claims the Windows build is signed")
+	}
+	// the link from the download card opens the answer, which is otherwise folded shut
+	for _, want := range []string{`href="#windows-warning"`, `id="windows-warning"`, "Windows warned me about Quietport. Is that normal?", "Show more", "Keep anyway", "Run anyway", `addEventListener("hashchange"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("site lacks %q", want)
+		}
+	}
+}

@@ -1,4 +1,16 @@
-# Windows code signing (free route: SignPath Foundation)
+# Windows code signing
+
+**Status, 2026-09-14: unsigned.** SignPath Foundation declined the application for lack of public visibility (GitHub
+stars, forks, contributors, outside references) and invited a new application once the project has more; SignPath
+also offers a paid subscription. A certificate's common name must be the validated legal name (CA/Browser Forum Code
+Signing Baseline Requirements 7.1.4.2.2), so a trade name cannot keep a person's name off the signature: only a legal
+entity can. Options as of that date: Microsoft Artifact Signing (a paid Azure subscription, about $10 a month,
+individual or organization, signs from GitHub Actions), Certum Open Source Code Signing (EUR 49, the developer's name),
+SSL.com with eSigner, or an organization certificate from DigiCert or Sectigo. The workflow below takes any of them in
+place of SignPath's signing step. Until then the invite page and the site's FAQ tell members how to get past the
+warning, and `.github/workflows/defender-check.yml` checks a published installer against current Defender definitions.
+
+## The free route that was tried: SignPath Foundation
 
 SignPath Foundation issues and applies a code-signing certificate to open-source projects at no cost, on the condition
 that the binaries are built by a public CI from a public repository. Quietport is MIT-licensed and builds on GitHub

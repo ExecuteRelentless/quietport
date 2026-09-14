@@ -415,10 +415,9 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
   <div class="center"><h2>Download</h2><p class="lede">One download for your Mac or PC. Open it, then start a folder or paste your invite link.</p></div>
   <div class="dl">
     <div class="card"><h3>Mac</h3><p class="file">Quietport.dmg</p><a class="more" href="/dl/Quietport.dmg">Download for Mac</a><p class="muted" style="font-size:.85rem;margin-top:.6rem">Apple silicon and Intel. macOS 12 or later.</p></div>
-    <div class="card"><h3>Windows</h3><p class="file">Quietport-Windows.zip</p><a class="more" href="/dl/Quietport-Windows.zip">Download for Windows</a><p class="muted" style="font-size:.85rem;margin-top:.6rem">Windows 10 and 11. Open the zip, then Quietport inside.</p></div>
+    <div class="card"><h3>Windows</h3><p class="file">Quietport-Windows.zip</p><a class="more" href="/dl/Quietport-Windows.zip">Download for Windows</a><p class="muted" style="font-size:.85rem;margin-top:.6rem">Windows 10 and 11. Open the zip, then Quietport inside. <a href="#windows-warning">What to do if Windows warns you</a>.</p></div>
   </div>
   <p class="ops">Linux: <a href="/dl/Quietport-linux-amd64">x86</a> <a href="/dl/Quietport-linux-arm64">arm64</a> (run it in a terminal). Running your own: <a href="/dl/quietport-hub-linux-arm64.tar.gz">Hub, Linux arm64</a> <a href="/dl/quietport-hub-linux-amd64.tar.gz">Hub, Linux x86</a> <a href="/dl/quietport-operator-darwin-arm64.tar.gz">Operator tools, Mac</a> <a href="/dl/SHA256SUMS.signed">Signed checksums</a> <a href="https://github.com/ExecuteRelentless/quietport" rel="noopener">Source on GitHub</a> <a href="/privacy">Privacy</a></p>
-  <p class="ops" style="margin-top:.6rem">Free code signing for the Windows build is provided by <a href="https://signpath.io" rel="noopener">SignPath.io</a>, certificate by <a href="https://signpath.org" rel="noopener">SignPath Foundation</a>.</p>
 </div></section>
 
 
@@ -435,6 +434,7 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
     <details><summary>How do I make a new folder and share it?</summary><p>Open <b>Share a folder</b> in QPSync, type a name under "Start a new folder" and click Create. The folder appears in QPSync on your computer, and you own it. Then pick it at the top of the same page, type the other person's name, and send them the link. Anyone in a folder can add more people; only the owner can remove them.</p></details>
     <details><summary>I already have Quietport. How do I get into another folder?</summary><p>Open <b>Share a folder</b> in QPSync, paste the link under "Have a link from someone?" and click Add the folder. Nothing to download. The folder appears in QPSync on that computer, and on your other computers after their next check-in, which happens every 5 minutes.</p></details>
     <details><summary>How do I remove it?</summary><p>Open <b>Share a folder</b> in QPSync and choose "Remove Quietport from this computer", or open the installer again and choose Remove. Both ask whether to keep your files. Nothing is left behind, and no administrator password is needed.</p></details>
+    <details id="windows-warning"><summary>Windows warned me about Quietport. Is that normal?</summary><p>Yes. Windows is careful with programs that few people have installed yet, and Quietport is new. The warning means Windows hasn't seen Quietport much. It doesn't mean anything was found in the file.</p><p>If your browser says the file isn't commonly downloaded, keep it. In Microsoft Edge, click the 3 dots next to the download, then <b>Keep</b>, then <b>Show more</b> and <b>Keep anyway</b>. If a blue box says <b>Windows protected your PC</b>, click <b>More info</b>, then <b>Run anyway</b>. If Windows still won't open it, the page for your invite link has a line you can paste into PowerShell instead, which sets up the same thing.</p></details>
     <details><summary>Does it work on phones or Chromebooks?</summary><p>Not yet. Mac and Windows today, and Linux from a terminal.</p></details>
     <details><summary>How big can a file be?</summary><p>Up to 10 GB each. If a transfer is interrupted, it picks up where it left off.</p></details>
   </div>
@@ -442,6 +442,14 @@ body.anim .board.in .person:nth-child(4){transition-delay:.24s}
 </div></section>
 
 <footer><div class="wrap"><span>Built with ❤️ in San Francisco</span><span><a href="https://buymeacoffee.com/quietport" rel="noopener">Buy Quietport a coffee</a></span></div></footer>
+<script>
+(function(){
+  // a link to a folded answer, such as "What to do if Windows warns you", opens that answer
+  function openTarget(){ var el = location.hash && document.getElementById(location.hash.slice(1)); if (el && el.tagName === "DETAILS") el.open = true; }
+  window.addEventListener("hashchange", openTarget);
+  openTarget();
+})();
+</script>
 <script>
 (function(){
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;

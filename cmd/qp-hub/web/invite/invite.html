@@ -29,7 +29,13 @@ ol{padding-left:1.2rem;margin:0 0 1rem}ol li{margin-bottom:.5rem}
 {{else if and (eq .OS "win") .WinApp}}
 <p>Download Quietport and open it from your Downloads folder. Double-click Quietport inside, then click OK.</p>
 <a class="btn" href="/j/{{.Code}}/Quietport-{{.Code}}.zip" download>Download for Windows</a>
-<p>If Windows shows a blue box first, click <b>More info</b> and then <b>Run anyway</b>. When it says <b>Quietport is connected</b>, your shared folder is in File Explorer.</p>
+<p>When it says <b>Quietport is connected</b>, your shared folder is in File Explorer.</p>
+<p class="small">Windows may warn you about Quietport. It does this with programs that few people have installed yet, and Quietport is new. If it happens:</p>
+<ol class="small">
+<li>If your browser says the file isn't commonly downloaded, keep it. In Microsoft Edge, click the 3 dots next to the download, then <b>Keep</b>, then <b>Show more</b> and <b>Keep anyway</b>.</li>
+<li>If a blue box says <b>Windows protected your PC</b>, click <b>More info</b>, then <b>Run anyway</b>.</li>
+<li>If Windows still stops it, open <b>Other options</b> below and paste the PowerShell line instead. It sets up the same thing.</li>
+</ol>
 {{else if eq .OS "mac"}}<p>Open Terminal (press ⌘ and Space, type <b>Terminal</b>, press Return), paste the line below and press Return.</p><pre>{{.Mac1}}</pre>
 <p>When it says <b>Quietport is connected.</b>, look for the QPSync folder in Finder.</p>
 {{else if eq .OS "win"}}<p>Open PowerShell (press the Windows key, type <b>PowerShell</b>, press Enter), paste the line below and press Enter.</p><pre>{{.Win1}}</pre>
