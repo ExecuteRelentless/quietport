@@ -138,7 +138,7 @@ type Heartbeat struct {
 	PendingBytes   int64                   `json:"pending_bytes"`
 	FreeDisk       int64                   `json:"free_disk"`
 	ErrorCount     int                     `json:"error_count"`
-	Conditions     []string                `json:"conditions,omitempty"` // quota_exceeded:<slug>, path_too_long:<slug>:<n>, corrupt_state:<slug>, clock_skew, disk_low
+	Conditions     []string                `json:"conditions,omitempty"` // quota_exceeded:<slug>, path_too_long:<slug>:<n>, corrupt_state:<slug>, sync_refused:<slug>, sync_failing:<slug>, clock_skew, disk_low
 	ClientTime     time.Time               `json:"client_time"`
 }
 

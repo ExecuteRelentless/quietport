@@ -257,7 +257,10 @@ func (a *Agent) syncAll(ctx context.Context, only string) {
 	}
 }
 
-func (a *Agent) effectiveMode(c CircleState) string {
+func (a *Agent) effectiveMode(c CircleState) string { return syncModeOf(c) }
+
+// syncModeOf: how a circle syncs on this device, for this member.
+func syncModeOf(c CircleState) string {
 	switch {
 	case c.Role == "readonly":
 		return "pull"
@@ -285,7 +288,7 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 	var res Result
 	if mode == "bisync" {
 		var healed bool
-		if res, healed = bisyncHealingTheMarker(run, c.Resync, bisyncWorkDir(c)); healed {
+		if res, healed = bisyncHealingTheMarker(run, c.resyncMode(), bisyncWorkDir(c)); healed {
 			a.logf("%s: the folder's marker had changed on the hub and the last sync knew of nothing else, so this cycle took a full sync keeping the hub's copy", c.Slug)
 		}
 	} else {
@@ -310,9 +313,7 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 		h.LastError = ""
 		h.Failures = 0
 		a.st.LastSyncOK = time.Now()
-		if c.Resync {
-			a.setResync(c.Slug, false)
-		}
+		a.syncSucceeded(c)
 	} else {
 		a.st.ErrorCount++
 		h.Failures++
@@ -324,14 +325,27 @@ func (a *Agent) syncCircle(ctx context.Context, c CircleState) {
 		if res.PathTooLong {
 			a.addCondition("path_too_long:" + c.Slug)
 		}
-		// a bisync that keeps aborting (new path, moved folder, lost listings) is not going to heal on its own
-		if mode == "bisync" && !c.Resync && h.Failures >= 3 && strings.Contains(strings.ToLower(res.Output), "bisync aborted") {
-			res.NeedsResync = true
-		}
-		if res.NeedsResync && mode == "bisync" && !c.Resync {
-			a.logf("%s: bisync state unusable, scheduling a full resync", c.Slug) // §9 corrupt bisync state
-			a.addCondition("corrupt_state:" + c.Slug)
-			a.setResync(c.Slug, true)
+		if mode == "bisync" {
+			full, refused, report := afterFailedBisync(res.Output, c.Resync, h.Failures)
+			if full {
+				a.logf("%s: bisync state unusable, scheduling a full resync", c.Slug) // §9 corrupt bisync state
+				a.addCondition("corrupt_state:" + c.Slug)
+				a.setResync(c.Slug, true)
+			}
+			if refused && !c.Refused {
+				// left for a person, never forced (docs/adr/0023)
+				a.logf("%s: refused %d times in a row; no full sync runs until a person chooses whose copies to keep", c.Slug, h.Failures)
+				_ = a.store.Update(func(cf *Config) {
+					for i := range cf.Circles {
+						if cf.Circles[i].Slug == c.Slug {
+							cf.Circles[i].Refused = true
+						}
+					}
+				})
+			}
+			if report != "" {
+				a.addCondition(report + ":" + c.Slug)
+			}
 		}
 	}
 	a.st.Circles[c.Slug] = h
@@ -736,12 +750,30 @@ func (a *Agent) longPaths(ctx context.Context) {
 	}
 }
 
-// setResync records whether the circle's next cycle is a full sync.
+// setResync records that the circle's next cycle is a full sync.
 func (a *Agent) setResync(slug string, on bool) {
 	_ = a.store.Update(func(cf *Config) {
 		for i := range cf.Circles {
 			if cf.Circles[i].Slug == slug {
 				cf.Circles[i].Resync = on
+			}
+		}
+	})
+}
+
+// syncSucceeded records a sync that succeeded, started from the circle state started. The folder is no longer refused.
+// The pending full sync is done unless a person asked for a different one while this sync ran: a request made during
+// it outlives it (docs/adr/0023).
+func (a *Agent) syncSucceeded(started CircleState) {
+	_ = a.store.Update(func(cf *Config) {
+		for i := range cf.Circles {
+			cs := &cf.Circles[i]
+			if cs.Slug != started.Slug {
+				continue
+			}
+			cs.Refused = false
+			if cs.ResyncKeep == started.ResyncKeep {
+				cs.Resync, cs.ResyncKeep = false, ""
 			}
 		}
 	})
@@ -773,13 +805,13 @@ func ensureMarker(dir string) {
 	}
 }
 
-// bisyncHealingTheMarker runs one bisync cycle through run, as a full sync keeping this device's copy when resync is
-// set. When rclone refuses the cycle over the marker alone it runs a full sync keeping the hub's copy at once, and
-// that result is the cycle's (docs/adr/0022). A device therefore never pushes its own marker at the others: every
-// 0.1.26 device takes the hub's.
-func bisyncHealingTheMarker(run func(resync string) Result, resync bool, work string) (res Result, healed bool) {
-	if resync {
-		return run(resyncThisDevice), false
+// bisyncHealingTheMarker runs one bisync cycle through run, as the full sync resync names when it names one. When
+// rclone refuses a normal cycle over the marker alone it runs a full sync keeping the hub's copy at once, and that
+// result is the cycle's (docs/adr/0022). A device therefore never pushes its own marker at the others: every 0.1.26
+// device takes the hub's.
+func bisyncHealingTheMarker(run func(resync string) Result, resync string, work string) (res Result, healed bool) {
+	if resync != noResync {
+		return run(resync), false
 	}
 	if res = run(noResync); res.OK || !refusalOverTheMarkerAlone(res.Output, work) {
 		return res, false

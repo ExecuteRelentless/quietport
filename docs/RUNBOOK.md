@@ -29,8 +29,11 @@ qpctl audit                       append-only audit log of every operator action
 ```
 
 Conditions reported by agents (visible in `qpctl status`): `quota_exceeded:<slug>`, `path_too_long:<slug>:<n>`,
-`corrupt_state:<slug>` (agent has scheduled a full resync), `disk_low`, `clock_skew`, and `relayed` when a device is
-going through a DERP relay instead of a direct path (slower; usually a NAT or VPN on the member's side).
+`corrupt_state:<slug>` (agent has scheduled a full resync), `sync_refused:<slug>` (rclone's guard refused the folder
+three times in a row and it waits for a person, see "A folder that keeps refusing to sync"), `sync_failing:<slug>` (three
+failed syncs in a row for another reason, such as no connection; it heals by itself when it can), `disk_low`,
+`clock_skew`, and `relayed` when a device is going through a DERP relay instead of a direct path (slower; usually a NAT
+or VPN on the member's side). `sync_refused` and `sync_failing` are sent once per episode, on the third failure.
 
 ## Onboarding
 
@@ -217,6 +220,36 @@ the Downloads folder, but it is not a fix either: Defender scans archives and sc
 Until then, a member on Windows can use the paste-a-line path from the invite page's "Other options" (PowerShell
 `irm … | iex`), which is not subject to the file download checks, or restore the file from Defender's quarantine and
 add an allow entry. Both are workarounds, not the fix.
+
+## A folder that keeps refusing to sync
+
+When rclone's own guard refuses a device's bisync of a folder three cycles in a row ("Safety abort", most often "all
+files were changed"), the device reports `sync_refused:<slug>` once (in `qpctl status <person>` and `qpctl logs
+<person>`) and marks the folder refused. Its `status` says "refused N times in a row" and gives the command below with
+the helper's full path. Since 0.1.27 the agent never settles this by itself: a full sync decides, for every file that
+differs between the device and the hub, which copy wins, and the agent's own full syncs keep the device's copy, which
+after a refusal could put a stale or restored copy over members' newer work (docs/adr/0023). While the folder is
+refused, the full syncs the agent schedules for itself (a rename, a new key generation, lost listings) wait too. Outside
+a refusal, two things still get a full sync without a person: rclone reporting that its saved listings are unusable or
+missing, and a refusal over the marker alone (docs/adr/0022). Other repeated failures, such as no connection, report `sync_failing:<slug>` and heal
+when they can; they are not refused and need no full sync.
+
+1. Find out why. The last error is in the device's status. "all files were changed" usually means the member restored
+   the folder from a backup or copied it back from elsewhere, so every file has a new time.
+2. Choose whose copies win where the two sides differ:
+   - `hub`: the device's copy is the suspect one (a restore, a laptop that was away a long time). Usually right.
+   - `newer`: both sides have real edits; the later change of each file wins.
+   - `this`: the hub's copy is wrong and this device's is the one to keep. This overwrites the other members' copies.
+   Files only on one side are copied to the other in every case, and nothing is deleted (a file deleted on one side
+   comes back from the other). A copy that loses goes to the hidden `.qp-versions` folder on its side for the retention
+   period.
+3. On the member's computer (a support call), run the command with the folder's name as it appears in QPSync (the
+   circle's slug works too):
+   - macOS: `"$HOME/Library/Application Support/Quietport/qp" resync "Trip" --keep hub`
+   - Windows (PowerShell): `& "$env:LOCALAPPDATA\Quietport\qp.cmd" resync "Trip" --keep hub`
+   - Linux: `~/.local/share/quietport/qp resync "Trip" --keep hub`
+   The folder's next sync is that full sync. The request is kept until a sync succeeds, and a folder that only receives,
+   only sends, or is waiting for a new invitation is refused with a sentence saying so.
 
 ## Support call: what to ask a member to run
 

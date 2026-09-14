@@ -50,10 +50,63 @@ type CircleState struct {
 	// Folder is this circle's directory under the sync root on this computer, chosen when the circle arrived and kept
 	// after that (docs/adr/0021). Empty in a config written before 0.1.26, where the display name was the directory.
 	Folder string `json:"folder,omitempty"`
+	// Refused: rclone's guard refused this folder's bisync refusalsBeforeReport times in a row, so it takes no full sync
+	// a person did not choose (docs/adr/0023). Cleared by the next sync that succeeds.
+	Refused bool `json:"refused,omitempty"`
+	// ResyncKeep: whose copies the pending full sync keeps where the sides differ, when a person asked for it
+	// (docs/adr/0023): "this", "hub" or "newer". Empty means this device's, as every scheduled full sync does.
+	ResyncKeep string `json:"resync_keep,omitempty"`
 	// AsidePending: the directory is new to this circle and has not been emptied yet, so the circle does not sync
 	// (docs/adr/0021). Set when a set-aside fails, cleared by the one that succeeds.
 	AsidePending bool `json:"aside_pending,omitempty"`
 }
+
+// resyncMode: how the circle's next cycle runs, as a normal bisync or as a full sync keeping someone's copies. While
+// the folder is refused only a person's choice makes it a full sync (docs/adr/0023).
+func (cs CircleState) resyncMode() string {
+	if !cs.Resync || (cs.Refused && cs.ResyncKeep == "") {
+		return noResync
+	}
+	switch cs.ResyncKeep {
+	case "hub":
+		return resyncKeepHub
+	case "newer":
+		return resyncKeepNewer
+	}
+	return resyncThisDevice
+}
+
+// requestFullSync asks for one full sync of a folder on this device, keeping this device's copies ("this"), the
+// hub's ("hub") or the newer of each ("newer") where the sides differ (docs/adr/0023). The folder is named as the
+// member sees it in the sync root, without regard to case, or by the circle's slug. It reports the folder's name and
+// the circle's slug. A folder that only receives or only sends here never bisyncs, and one waiting for its key cannot
+// sync, so neither is accepted.
+func (c *Config) requestFullSync(folder, keep string) (name, slug string, err error) {
+	if _, ok := keepWords[keep]; !ok {
+		return "", "", errors.New("say whose copies to keep where the two sides differ: this, hub or newer")
+	}
+	for i := range c.Circles {
+		cs := &c.Circles[i]
+		if cs.Removed || (!strings.EqualFold(cs.folder(), folder) && cs.Slug != folder) {
+			continue
+		}
+		switch {
+		case cs.NeedsKey:
+			return "", "", errors.New(cs.folder() + " is waiting for a new invitation on this computer, so it cannot sync yet")
+		case syncModeOf(*cs) != "bisync":
+			return "", "", errors.New(cs.folder() + " only receives or only sends on this computer, so it never takes a full sync")
+		}
+		cs.Resync, cs.ResyncKeep = true, keep
+		return cs.folder(), cs.Slug, nil
+	}
+	return "", "", errors.New("there is no folder called " + strconv.Quote(folder) + " on this computer")
+}
+
+// keepWords: the choices a full sync can be asked to make, as the person reads them.
+var keepWords = map[string]string{"this": "this computer's", "hub": "the hub's", "newer": "the newer"}
+
+// KeepWords: how a keep choice reads, for the command line.
+func KeepWords(keep string) string { return keepWords[keep] }
 
 // syncable: the circle has everything a sync needs and nothing that forbids one.
 func (cs CircleState) syncable() bool {

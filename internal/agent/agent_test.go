@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -864,20 +865,20 @@ func TestARefusalOverTheMarkerAloneIsSettledInTheSameCycleKeepingTheHubsCopy(t *
 	refused, synced := Result{Output: refusedOverEveryFile}, Result{OK: true}
 
 	run, calls := runner(refused, synced)
-	if res, healed := bisyncHealingTheMarker(run, false, markerListings(t, MarkerFile)); !res.OK || !healed ||
+	if res, healed := bisyncHealingTheMarker(run, noResync, markerListings(t, MarkerFile)); !res.OK || !healed ||
 		!slices.Equal(*calls, []call{{noResync}, {resyncKeepHub}}) {
 		t.Errorf("refused over the marker: ok %v, healed %v, calls %v", res.OK, healed, *calls)
 	}
 	run, calls = runner(refused)
-	if res, healed := bisyncHealingTheMarker(run, false, markerListings(t, MarkerFile, "budget.xlsx")); res.OK || healed || len(*calls) != 1 {
+	if res, healed := bisyncHealingTheMarker(run, noResync, markerListings(t, MarkerFile, "budget.xlsx")); res.OK || healed || len(*calls) != 1 {
 		t.Errorf("refused with a file in the listing: ok %v, healed %v, calls %v", res.OK, healed, *calls)
 	}
 	run, calls = runner(refused)
-	if _, healed := bisyncHealingTheMarker(run, true, markerListings(t, MarkerFile)); healed || !slices.Equal(*calls, []call{{resyncThisDevice}}) {
+	if _, healed := bisyncHealingTheMarker(run, resyncKeepNewer, markerListings(t, MarkerFile)); healed || !slices.Equal(*calls, []call{{resyncKeepNewer}}) {
 		t.Errorf("a cycle that is already a full sync: healed %v, calls %v", healed, *calls)
 	}
 	run, calls = runner(synced)
-	if res, healed := bisyncHealingTheMarker(run, false, markerListings(t, MarkerFile)); !res.OK || healed || len(*calls) != 1 {
+	if res, healed := bisyncHealingTheMarker(run, noResync, markerListings(t, MarkerFile)); !res.OK || healed || len(*calls) != 1 {
 		t.Errorf("a cycle that synced: ok %v, healed %v, calls %v", res.OK, healed, *calls)
 	}
 }
@@ -940,7 +941,11 @@ func TestTwoDevicesSyncASharedFolderThroughRclone(t *testing.T) {
 			res = rclone(d, resync)
 		} else {
 			ensureMarker(d.dir)
-			res, healed = bisyncHealingTheMarker(func(resync string) Result { return rclone(d, resync) }, d.full, d.work)
+			mode := noResync
+			if d.full {
+				mode = resyncThisDevice
+			}
+			res, healed = bisyncHealingTheMarker(func(resync string) Result { return rclone(d, resync) }, mode, d.work)
 		}
 		if res.OK {
 			d.full, d.refusals = false, 0
@@ -1047,5 +1052,348 @@ func TestTwoDevicesSyncASharedFolderThroughRclone(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(d.dir, "last file.txt")); !os.IsNotExist(err) {
 			t.Errorf("%s: the deleted file came back", d.name)
 		}
+	}
+}
+
+// A bisync that fails is forced into a full sync only when rclone's saved listings cannot be used (docs/adr/0023):
+// it says "must run --resync", or it cannot find them at all, which 1.75.1 calls retryable although no later run
+// finds them either. A run rclone's own guard refused ("Safety abort") that is refused three times in a row marks the
+// folder refused and is reported once, and the files are left for a person. Any other failure three times in a row,
+// such as a device that is offline, is reported once as failing and heals by itself when it can.
+func TestAFailedSyncIsForcedOnlyWhenRcloneCannotUseItsListings(t *testing.T) {
+	unusable := "2026/09/14 ERROR : Bisync critical error: cannot read prior listing: open /x.path1.lst: bad listing\n" +
+		"2026/09/14 ERROR : Bisync aborted. Must run --resync to recover.\n"
+	lost := "2026/09/14 10:30:34 ERROR : Bisync critical error: cannot find prior Path1 or Path2 listings, likely due to critical error on prior run \n" +
+		"Tip: here are the filenames we were looking for. Do they exist? \n" +
+		"2026/09/14 10:30:34 ERROR : Bisync aborted. Error is retryable without --resync due to --resilient mode.\n" +
+		"2026/09/14 10:30:34 NOTICE: Failed to bisync: bisync aborted\n"
+	offline := "2026/09/14 ERROR : Bisync critical error: dial tcp 100.64.0.1:3900: connect: no route to host\n" +
+		"2026/09/14 ERROR : Bisync aborted. Error is retryable without --resync due to --resilient mode.\n"
+	refused := "2026/09/14 ERROR : Safety abort: all files were changed on Path1 \"/Users/pat/QPSync/Trip/\". Run with --force if desired.\n" +
+		"2026/09/14 NOTICE: Bisync aborted. Please try again.\n2026/09/14 NOTICE: Failed to bisync: all files were changed\n"
+	for _, c := range []struct {
+		why           string
+		output        string
+		resync        bool
+		failures      int
+		full, refused bool
+		report        string
+	}{
+		{"rclone says its listings are unusable", unusable, false, 1, true, false, ""},
+		{"rclone cannot find its listings", lost, false, 1, true, false, ""},
+		{"unusable, but this cycle already was a full sync, the third time", unusable, true, 3, false, false, "sync_failing"},
+		{"offline, the first time", offline, false, 1, false, false, ""},
+		{"offline, the third time in a row", offline, false, 3, false, false, "sync_failing"},
+		{"offline, the fourth time: already reported", offline, false, 4, false, false, ""},
+		{"rclone's guard refused the run, twice", refused, false, 2, false, false, ""},
+		{"rclone's guard refused the run, three times", refused, false, 3, false, true, "sync_refused"},
+		{"rclone's guard refused the run, ten times: still refused, already reported", refused, false, 10, false, true, ""},
+	} {
+		full, isRefused, report := afterFailedBisync(c.output, c.resync, c.failures)
+		if full != c.full || isRefused != c.refused || report != c.report {
+			t.Errorf("%s: full sync %v, refused %v, report %q; want %v, %v, %q", c.why, full, isRefused, report, c.full, c.refused, c.report)
+		}
+	}
+}
+
+// While a folder is refused, no full sync runs that a person did not choose (docs/adr/0023). A full sync the agent
+// schedules itself, for a rename, a new key generation or lost listings, keeps this device's copies, which is exactly
+// what the refusal is protecting the other members from. It waits, and a person's choice runs.
+func TestARefusedFolderTakesOnlyTheFullSyncAPersonChose(t *testing.T) {
+	for _, c := range []struct {
+		why  string
+		cs   CircleState
+		want string
+	}{
+		{"nothing pending", CircleState{}, noResync},
+		{"a scheduled full sync", CircleState{Resync: true}, resyncThisDevice},
+		{"a scheduled full sync while refused", CircleState{Resync: true, Refused: true}, noResync},
+		{"a person chose the hub's copies while refused", CircleState{Resync: true, Refused: true, ResyncKeep: "hub"}, resyncKeepHub},
+		{"a person chose this device's copies", CircleState{Resync: true, ResyncKeep: "this"}, resyncThisDevice},
+		{"a person chose the newer copies", CircleState{Resync: true, ResyncKeep: "newer"}, resyncKeepNewer},
+	} {
+		if got := c.cs.resyncMode(); got != c.want {
+			t.Errorf("%s: %q, want %q", c.why, got, c.want)
+		}
+	}
+}
+
+// What a forced full sync did to a member's work, through rclone itself (docs/adr/0023). Pat restores a copy of the
+// folder from a backup, and every file comes back with a new time. Sam has meanwhile edited one of them. rclone
+// refuses Pat's bisync because every file changed. Under 0.1.25 the third refusal forced a full sync keeping Pat's
+// copy, and Sam's edit was replaced on the hub. Now the refusals are reported and the hub keeps Sam's edit.
+func TestAFolderRefusedThreeTimesIsReportedNotForced(t *testing.T) {
+	bin := os.Getenv("QP_RCLONE")
+	if bin == "" {
+		t.Skip("set QP_RCLONE to an rclone binary to run it")
+	}
+	base, err := os.MkdirTemp(filepath.Join(string(os.PathSeparator), "tmp"), "qp")
+	if runtime.GOOS == "windows" || err != nil {
+		base, err = os.MkdirTemp("", "qp")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	hub := filepath.Join(base, "bucket") + string(os.PathSeparator)
+	pat, sam := filepath.Join(base, "pat", "Trip"), filepath.Join(base, "sam", "Trip")
+	patWork, samWork := filepath.Join(base, "pat", "bisync"), filepath.Join(base, "sam", "bisync")
+	for _, d := range []string{hub, pat, sam, patWork, samWork} {
+		_ = os.MkdirAll(d, 0o755)
+	}
+	run := func(dir, work, resync string) Result {
+		cmd := exec.Command(bin, bisyncArgs(CircleState{}, dir, hub, work, resync)...)
+		cmd.Env = append(os.Environ(), "RCLONE_CONFIG="+os.DevNull)
+		out, err := cmd.CombinedOutput()
+		return Result{OK: err == nil, Err: err, Output: string(out)}
+	}
+	must := func(r Result, why string) {
+		t.Helper()
+		if !r.OK {
+			t.Fatalf("%s: %v\n%s", why, r.Err, r.Output)
+		}
+	}
+	week := time.Now().Add(-7 * 24 * time.Hour)
+	for _, f := range []string{"plan.txt", "budget.txt"} {
+		_ = os.WriteFile(filepath.Join(pat, f), []byte("first draft of "+f), 0o644)
+		_ = os.Chtimes(filepath.Join(pat, f), week, week)
+	}
+	ensureMarker(pat)
+	must(run(pat, patWork, resyncThisDevice), "Pat starts the folder")
+	ensureMarker(sam)
+	must(run(sam, samWork, resyncThisDevice), "Sam joins")
+	// Pat restores last week's copy, marker included, stamped now; Sam edits plan.txt, and that reaches the hub
+	restored := time.Now().Add(-time.Minute)
+	for _, f := range []string{"plan.txt", "budget.txt", MarkerFile} {
+		_ = os.Chtimes(filepath.Join(pat, f), restored, restored)
+	}
+	_ = os.WriteFile(filepath.Join(sam, "plan.txt"), []byte("sam's edit"), 0o644)
+	must(run(sam, samWork, noResync), "Sam's edit goes up")
+
+	// Pat's device, cycle by cycle, as syncCircle runs it
+	trip := CircleState{CircleConfig: model.CircleConfig{Slug: "trip-x2a4", DisplayName: "Trip"}, Folder: "Trip"}
+	failures, reports := 0, []string{}
+	cycle := func(why string) Result {
+		res := run(pat, patWork, trip.resyncMode())
+		if res.OK {
+			failures, trip.Resync, trip.ResyncKeep, trip.Refused = 0, false, "", false
+			return res
+		}
+		failures++
+		full, refused, report := afterFailedBisync(res.Output, trip.Resync, failures)
+		trip.Refused = trip.Refused || refused
+		if full {
+			trip.Resync = true
+		}
+		if report != "" {
+			reports = append(reports, report)
+		}
+		return res
+	}
+	for i := 0; i < 5; i++ {
+		cycle("after the restore")
+	}
+	if !trip.Refused || !slices.Equal(reports, []string{"sync_refused"}) {
+		t.Errorf("refused five times: refused %v, reports %v; want refused, reported once", trip.Refused, reports)
+	}
+	// the folder is renamed on the hub while refused: the agent schedules its own full sync, which must wait
+	trip.Resync = true
+	cycle("a rename's full sync while refused")
+	if b, _ := os.ReadFile(filepath.Join(hub, "plan.txt")); string(b) != "sam's edit" {
+		t.Fatalf("the hub's plan.txt is %q: a full sync nobody chose replaced Sam's edit", b)
+	}
+	// the operator looks, and asks Pat's device for one full sync that keeps the hub's copies
+	c := Config{Circles: []CircleState{trip}}
+	if _, _, err := c.requestFullSync("trip", "hub"); err != nil {
+		t.Fatal(err)
+	}
+	trip = c.Circles[0]
+	if res := cycle("the full sync the operator asked for"); !res.OK {
+		t.Fatalf("the full sync the operator asked for: %v\n%s", res.Err, res.Output)
+	}
+	if res := cycle("Pat's next cycle"); !res.OK || trip.Refused {
+		t.Fatalf("Pat's next cycle: %v, refused %v\n%s", res.Err, trip.Refused, res.Output)
+	}
+	for where, dir := range map[string]string{"the hub": hub, "Pat's folder": pat} {
+		if b, _ := os.ReadFile(filepath.Join(dir, "plan.txt")); string(b) != "sam's edit" {
+			t.Errorf("%s: plan.txt is %q after keeping the hub's copies", where, b)
+		}
+	}
+
+	// a crash loses Pat's listings and their backups: rclone never finds them, so the agent forces the full sync
+	lists, _ := filepath.Glob(filepath.Join(patWork, "*.lst*"))
+	for _, l := range lists {
+		_ = os.Remove(l)
+	}
+	if res := cycle("lost listings"); res.OK || !trip.Resync {
+		t.Fatalf("lost listings: ok %v, full sync scheduled %v\n%s", res.OK, trip.Resync, res.Output)
+	}
+	if res := cycle("the forced full sync"); !res.OK {
+		t.Fatalf("the forced full sync: %v\n%s", res.Err, res.Output)
+	}
+	if res := cycle("healed"); !res.OK {
+		t.Fatalf("after the forced full sync: %v\n%s", res.Err, res.Output)
+	}
+}
+
+// When a folder keeps being refused, a person decides how it recovers (docs/adr/0023): one full sync on that device
+// that keeps this device's copies, the hub's, or the newer of each, where the two sides differ. The request names the
+// folder as the member sees it, or the circle's slug. It is kept until a sync succeeds.
+func TestAFullSyncIsAskedForByFolderWithTheCopyToKeep(t *testing.T) {
+	c := Config{Circles: []CircleState{
+		{CircleConfig: model.CircleConfig{Slug: "shared-a1", DisplayName: "Shared"}, Folder: "Shared"},
+		{CircleConfig: model.CircleConfig{Slug: "shared-b2", DisplayName: "Shared"}, Folder: "Shared 2"},
+		{CircleConfig: model.CircleConfig{Slug: "old", DisplayName: "Old"}, Folder: "Old", Removed: true},
+	}}
+	if name, slug, err := c.requestFullSync("shared 2", "newer"); err != nil || name != "Shared 2" || slug != "shared-b2" {
+		t.Fatalf("by folder: %q %q, %v", name, slug, err)
+	}
+	if f := c.Circles[1]; !f.Resync || f.resyncMode() != resyncKeepNewer || c.Circles[0].Resync {
+		t.Errorf("the request went to the wrong folder or mode: %+v", c.Circles[:2])
+	}
+	if _, _, err := c.requestFullSync("shared-a1", "this"); err != nil || c.Circles[0].resyncMode() != resyncThisDevice {
+		t.Errorf("by slug, keeping this device's copies: %v, %q", err, c.Circles[0].resyncMode())
+	}
+	if _, _, err := c.requestFullSync("Shared", "hub"); err != nil || c.Circles[0].resyncMode() != resyncKeepHub {
+		t.Errorf("keeping the hub's copies: %v, %q", err, c.Circles[0].resyncMode())
+	}
+	if _, _, err := c.requestFullSync("Shared", "mine"); err == nil {
+		t.Error("an unknown choice was accepted")
+	}
+	if _, _, err := c.requestFullSync("Shared", ""); err == nil {
+		t.Error("no choice was accepted: the person has to say whose copies win")
+	}
+	if _, _, err := c.requestFullSync("Old", "hub"); err == nil {
+		t.Error("a folder removed from this device was accepted")
+	}
+	if _, _, err := c.requestFullSync("Nope", "hub"); err == nil {
+		t.Error("a folder that is not here was accepted")
+	}
+	// a folder that only receives or only sends here never bisyncs, and one waiting for its key cannot sync at all
+	c.Circles = append(c.Circles,
+		CircleState{CircleConfig: model.CircleConfig{Slug: "ro", DisplayName: "Photos", Role: "readonly"}, Folder: "Photos"},
+		CircleState{CircleConfig: model.CircleConfig{Slug: "in", DisplayName: "Inbox", SyncMode: model.ModeReceiveOnly}, Folder: "Inbox"},
+		CircleState{CircleConfig: model.CircleConfig{Slug: "key", DisplayName: "Keyless"}, Folder: "Keyless", NeedsKey: true},
+	)
+	for _, folder := range []string{"Photos", "Inbox", "Keyless"} {
+		if _, _, err := c.requestFullSync(folder, "hub"); err == nil {
+			t.Errorf("%s: a full sync was accepted for a folder that cannot take one", folder)
+		}
+	}
+	// a full sync the agent schedules itself (an arrival, a rename) keeps this device's copies, as it always has
+	auto := CircleState{Resync: true}
+	if auto.resyncMode() != resyncThisDevice || (CircleState{}).resyncMode() != noResync {
+		t.Errorf("modes: scheduled %q, none %q", auto.resyncMode(), CircleState{}.resyncMode())
+	}
+	for mode, want := range map[string][]string{
+		noResync:         nil,
+		resyncThisDevice: {"--resync"},
+		resyncKeepHub:    {"--resync-mode", "path2"},
+		resyncKeepNewer:  {"--resync-mode", "newer"},
+	} {
+		args := bisyncArgs(CircleState{}, "/l", "R:", "/w", mode)
+		got := []string{}
+		for i, a := range args {
+			if a == "--resync" {
+				got = append(got, a)
+			}
+			if a == "--resync-mode" && i+1 < len(args) {
+				got = append(got, a, args[i+1])
+			}
+		}
+		if !slices.Equal(got, want) && !(len(want) == 0 && len(got) == 0) {
+			t.Errorf("mode %q: %v, want %v", mode, got, want)
+		}
+	}
+}
+
+// The command a person runs reaches the running agent through its loopback page and asks for the full sync there
+// (docs/adr/0023), so the agent, which holds the config, is the one that changes it and starts the sync at once.
+func TestAFullSyncAskedForFromTheCommandLineReachesTheRunningAgent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	_ = os.MkdirAll(AppDir(), 0o700)
+	token := "tok-" + strconv.Itoa(os.Getpid())
+	cfg := Config{Version: 1, DeviceID: 4, UIToken: token, Circles: []CircleState{
+		{CircleConfig: model.CircleConfig{Slug: "trip-x2a4", DisplayName: "Trip"}, Folder: "Trip", KeySealed: "k", KeyGen: 1},
+	}}
+	a := &Agent{store: &Store{path: ConfigPath(), cfg: cfg}, logger: log.New(io.Discard, "", 0), syncNow: make(chan string, 1), st: LoadState()}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	port := a.serveLocalUI(ctx, 0, token)
+	if port == 0 {
+		t.Fatal("the loopback page did not start")
+	}
+	_ = a.store.Update(func(c *Config) { c.UIPort = port })
+
+	if _, err := AskForFullSync("Trip", "sideways"); err == nil {
+		t.Error("an unknown choice was accepted")
+	}
+	if a.store.Config().Circles[0].Resync {
+		t.Fatal("a refused request changed the folder")
+	}
+	name, err := AskForFullSync("trip", "hub")
+	if err != nil || name != "Trip" {
+		t.Fatalf("request: %q, %v", name, err)
+	}
+	if f := a.store.Config().Circles[0]; !f.Resync || f.resyncMode() != resyncKeepHub {
+		t.Errorf("the agent's config: %+v", f)
+	}
+	select {
+	case slug := <-a.syncNow:
+		if slug != "trip-x2a4" {
+			t.Errorf("started a sync of %q", slug)
+		}
+	default:
+		t.Error("the full sync was recorded but not started")
+	}
+	if b, _ := os.ReadFile(ConfigPath()); !strings.Contains(string(b), `"resync_keep": "hub"`) {
+		t.Error("the request did not reach the config on disk, so a restart would forget it")
+	}
+	if _, err := AskForFullSync("Nope", "hub"); err == nil || !strings.Contains(err.Error(), "no folder called") {
+		t.Errorf("a folder that is not here: %v", err)
+	}
+}
+
+// A person's request made while a scheduled full sync is already running outlives that sync (docs/adr/0023): the sync
+// that finishes clears only what it was started with.
+func TestARequestMadeDuringAFullSyncOutlivesIt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	cfg := Config{Circles: []CircleState{{CircleConfig: model.CircleConfig{Slug: "trip", DisplayName: "Trip"}, Folder: "Trip", Resync: true, Refused: true}}}
+	a := &Agent{store: &Store{path: filepath.Join(t.TempDir(), "config.json"), cfg: cfg}, logger: log.New(io.Discard, "", 0)}
+	started := a.store.Config().Circles[0]
+	_ = a.store.Update(func(c *Config) { _, _, _ = c.requestFullSync("Trip", "hub") })
+	a.syncSucceeded(started)
+	if f := a.store.Config().Circles[0]; !f.Resync || f.ResyncKeep != "hub" || f.Refused {
+		t.Errorf("after the running sync finished: %+v; want the hub request still pending and the refusal over", f)
+	}
+	a.syncSucceeded(a.store.Config().Circles[0])
+	if f := a.store.Config().Circles[0]; f.Resync || f.ResyncKeep != "" {
+		t.Errorf("after the requested sync finished: %+v", f)
+	}
+}
+
+// The status a person reads on a support call says when a folder is refused and gives the command that settles it,
+// with the helper's full path, since it is not on the PATH (docs/adr/0023). A folder failing for another reason is
+// not told to take a full sync.
+func TestStatusGivesARefusedFolderTheCommandThatSettlesIt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("LOCALAPPDATA", filepath.Join(os.Getenv("HOME"), "AppData", "Local"))
+	helper := filepath.Join(AppDir(), "qp")
+	if runtime.GOOS == "windows" {
+		helper += ".cmd"
+	}
+	refused := CircleState{CircleConfig: model.CircleConfig{Slug: "trip", DisplayName: "Trip"}, Folder: "Trip", Refused: true}
+	line := folderState(refused, model.CircleHealth{LastError: "Failed to bisync: all files were changed", Failures: 4})
+	for _, want := range []string{"refused 4 times", "all files were changed", strconv.Quote(helper) + ` resync "Trip" --keep this|hub|newer`} {
+		if !strings.Contains(line, want) {
+			t.Errorf("refused folder: %q lacks %q", line, want)
+		}
+	}
+	offline := folderState(CircleState{Folder: "Trip"}, model.CircleHealth{LastError: "connect: no route to host", Failures: 4})
+	if strings.Contains(offline, "resync") || !strings.Contains(offline, "no route to host") {
+		t.Errorf("failing for another reason: %q", offline)
 	}
 }

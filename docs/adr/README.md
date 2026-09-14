@@ -25,3 +25,4 @@ A decision is superseded by adding a new record, never by editing the old one.
 - [0020 A folder's name is a directory name, checked on the hub and again on every computer](0020-a-folder-name-is-a-directory-name.md)
 - [0021 Each folder has its own directory on a computer, and arrives there with nothing in it](0021-each-folder-has-its-own-directory-and-arrives-empty.md)
 - [0022 New markers are the same file on every device, and a refusal over the marker takes the hub's](0022-every-marker-is-the-same-file.md)
+- [0023 A refused sync is reported, and a person chooses how it recovers](0023-a-refused-sync-is-reported-not-forced.md)

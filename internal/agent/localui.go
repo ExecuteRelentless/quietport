@@ -242,6 +242,28 @@ func (a *Agent) serveLocalUI(ctx context.Context, port int, token string) int {
 		}
 		_ = json.NewEncoder(w).Encode(out)
 	})
+	// one full sync of a folder, keeping the copies a person chose, for a folder rclone keeps refusing (docs/adr/0023);
+	// reached from `qpsync-agent resync`, not from the page
+	mux.HandleFunc("POST /resync", func(w http.ResponseWriter, r *http.Request) {
+		if !check(w, r) {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		var name, slug string
+		var err error
+		_ = a.store.Update(func(c *Config) { name, slug, err = c.requestFullSync(r.FormValue("folder"), r.FormValue("keep")) })
+		if err != nil {
+			w.WriteHeader(400)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		a.logf("%s: a full sync keeping %s copies was asked for", slug, keepWords[r.FormValue("keep")])
+		select {
+		case a.syncNow <- slug:
+		default:
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"folder": name})
+	})
 	mux.HandleFunc("GET /people", func(w http.ResponseWriter, r *http.Request) {
 		if !check(w, r) {
 			return

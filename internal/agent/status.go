@@ -2,8 +2,12 @@ package agent
 
 import (
 	"fmt"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
+
+	"quietport.app/quietport/internal/model"
 )
 
 // StatusText: FR-58, human-readable for support calls. Deliberately names no vendor (NFR-32).
@@ -39,24 +43,35 @@ func StatusText() string {
 	fmt.Fprintf(&b, "Errors since start: %d (started %s ago)\n", st.ErrorCount, ago(st.StartedAt))
 	for _, c := range cfg.Circles {
 		h := st.Circles[c.Slug]
-		state := "ok"
-		switch {
-		case c.Removed:
-			state = "no longer shared with this device"
-		case c.NeedsKey:
-			state = "needs a new invitation"
-		case h.LastError != "":
-			state = "last attempt failed: " + h.LastError
-		case h.LastSync.IsZero():
-			state = "not synced yet"
-		}
 		last := "never"
 		if !h.LastSync.IsZero() {
 			last = ago(h.LastSync) + " ago"
 		}
-		fmt.Fprintf(&b, "  %-24s last sync %-12s %s\n", c.folder()+"/", last, state)
+		fmt.Fprintf(&b, "  %-24s last sync %-12s %s\n", c.folder()+"/", last, folderState(c, h))
 	}
 	return b.String()
+}
+
+// folderState: one folder's state as a person reads it on a support call. A refused folder gets the command that
+// settles it, with the helper's full path, because the helper is not on the PATH (docs/adr/0023).
+func folderState(c CircleState, h model.CircleHealth) string {
+	switch {
+	case c.Removed:
+		return "no longer shared with this device"
+	case c.NeedsKey:
+		return "needs a new invitation"
+	case c.Refused:
+		helper := filepath.Join(AppDir(), "qp")
+		if runtime.GOOS == "windows" {
+			helper += ".cmd"
+		}
+		return fmt.Sprintf("refused %d times in a row: %s. It waits for a person: %q resync %q --keep this|hub|newer", h.Failures, h.LastError, helper, c.folder())
+	case h.LastError != "":
+		return "last attempt failed: " + h.LastError
+	case h.LastSync.IsZero():
+		return "not synced yet"
+	}
+	return "ok"
 }
 
 func ago(t time.Time) string {

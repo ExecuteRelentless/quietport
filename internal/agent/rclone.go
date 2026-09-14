@@ -105,7 +105,6 @@ type Result struct {
 	OK          bool
 	Err         error
 	Output      string
-	NeedsResync bool
 	Quota       bool
 	PathTooLong bool
 	Transferred int64
@@ -153,6 +152,8 @@ func bisyncArgs(cs CircleState, local, remote, work string, resync string) []str
 		args = append(args, "--resync")
 	case resyncKeepHub:
 		args = append(args, "--resync-mode", "path2")
+	case resyncKeepNewer:
+		args = append(args, "--resync-mode", "newer")
 	}
 	return args
 }
@@ -163,6 +164,7 @@ const (
 	noResync         = ""
 	resyncThisDevice = "path1"
 	resyncKeepHub    = "path2" // docs/adr/0022
+	resyncKeepNewer  = "newer" // asked for by a person (docs/adr/0023)
 )
 
 // Sync runs one cycle for a circle in the mode that applies to this member (FR-7).
@@ -196,11 +198,43 @@ func (r *Rclone) Sync(ctx context.Context, cs CircleState, key model.CircleKey, 
 	res.PathTooLong = strings.Contains(lo, "file name too long") || strings.Contains(lo, "name too long") || strings.Contains(lo, "path too long")
 	// Only a state that bisync itself says is unusable earns a full resync; "retryable without --resync" errors
 	// (empty prior listing after an empty first run, transient hub errors) are left to the next cycle (--resilient).
-	res.NeedsResync = (strings.Contains(lo, "must run --resync") || strings.Contains(lo, "bisync critical error")) && !strings.Contains(lo, "retryable without --resync")
 	if runtime.GOOS == "windows" {
 		hideDir(filepath.Join(local, VersionsDir))
 	}
 	return res
+}
+
+// rcloneSaysResync: the listings rclone saved cannot be used and only a full sync recovers. rclone says so ("must run
+// --resync", or a critical error it does not call retryable), or it cannot find the listings at all: 1.75.1 calls
+// that retryable under --resilient, yet no later run finds them, which is what a crash in the middle of a sync leaves.
+func rcloneSaysResync(output string) bool {
+	lo := strings.ToLower(output)
+	if strings.Contains(lo, "cannot find prior path1 or path2 listings") {
+		return true
+	}
+	return (strings.Contains(lo, "must run --resync") || strings.Contains(lo, "bisync critical error")) && !strings.Contains(lo, "retryable without --resync")
+}
+
+// refusalsBeforeReport: failed cycles in a row before a folder is reported, and before a refusal marks it refused.
+const refusalsBeforeReport = 3
+
+// afterFailedBisync decides what follows a bisync that failed for the failures-th time in a row (docs/adr/0023).
+// fullSync: the next cycle is a full sync, only when rclone cannot use its listings and this cycle was not already
+// one. refused: rclone's own guard ("Safety abort") refused the run refusalsBeforeReport times in a row, so the folder
+// takes no full sync that a person did not choose. report: the condition to send the hub, once, on the
+// refusalsBeforeReport-th failure: sync_refused for a refusal, sync_failing for anything else that has not healed,
+// such as a device that is offline. A forced full sync keeps this device's copy wherever the sides differ, which after
+// a refusal or a bad connection can put older copies over members' newer ones; so nothing else forces one.
+func afterFailedBisync(output string, resync bool, failures int) (fullSync, refused bool, report string) {
+	fullSync = rcloneSaysResync(output) && !resync
+	refused = !fullSync && strings.Contains(output, "Safety abort") && failures >= refusalsBeforeReport
+	if !fullSync && failures == refusalsBeforeReport {
+		report = "sync_failing"
+		if refused {
+			report = "sync_refused"
+		}
+	}
+	return fullSync, refused, report
 }
 
 // ScrubPaths removes plaintext file names from rclone output before it reaches the log (NFR-25): each path becomes a short hash.
