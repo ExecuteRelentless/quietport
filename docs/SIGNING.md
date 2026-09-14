@@ -11,7 +11,7 @@ Actions (`.github/workflows/windows.yml`), which is what they require.
    - Description: a private, invite-only shared folder for Mac, Windows and Linux. Files are encrypted on the
      member's computer before they leave it; the server stores ciphertext only.
    - Build: GitHub Actions, workflow `windows`, artifact `windows-unsigned` (Quietport.exe, qpsync-agent.exe,
-     qpctl.exe, tailscaled.exe, tailscale.exe).
+     qpctl.exe, Quietport Network.exe, tailscale.exe).
    - Maintainer: your name and email, GitHub user `ExecuteRelentless`.
 2. When approved they create an organization for the project. In SignPath: add the GitHub repository as a trusted
    build system, create project `quietport` with signing policy `release-signing` (Authenticode, the OSS certificate),

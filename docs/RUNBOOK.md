@@ -202,8 +202,11 @@ Two things finish the job, both outside this repo:
 1. **Code signing.** Free for this project: SignPath Foundation signs open-source builds made by the public GitHub
    workflow (`docs/SIGNING.md`, `.github/workflows/windows.yml`). Paid routes if speed matters: Azure Trusted Signing
    (about $10/month, identity validation once) or a classic OV certificate from Certum or SSL.com.
-   Sign `quietport-installer-windows-amd64.exe`, `qpsync-agent.exe`, `tailscaled.exe` and `rclone.exe` in the bundle
-   with `signtool` (or the vendor's CLI) before publishing, and the SmartScreen prompt disappears once reputation builds.
+   Sign `quietport-installer-windows-amd64.exe` and every exe in `client-windows-amd64/`: `qpsync-agent.exe`,
+   `Quietport Network.exe` (the mesh daemon, named so since 0.1.21, ADR 0015), `tailscale.exe`, `rclone.exe` and
+   `qpctl.exe`, with `signtool` (or the vendor's CLI) before publishing, and the SmartScreen prompt disappears once
+   reputation builds. The installer carries the client inside it (`go:embed`), so sign the client files first and
+   build the installer from the signed ones; signing the installer alone leaves the programs it installs unsigned.
 2. **False-positive report to Microsoft.** https://www.microsoft.com/en-us/wdsi/filesubmission (sign in with a
    Microsoft account, "Software developer", upload the exe). Detections on clean files are usually lifted within 1 to
    3 days and the cleared hash stops being flagged for everyone.
