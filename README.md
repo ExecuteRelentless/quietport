@@ -18,6 +18,8 @@ the installers and the public site. MIT licensed. Current release: 0.1.15.
   gets a one-time link that expires in 24 hours. The folder key is sealed under the link's code on the member's own
   computer; the hub stores only a hash of the code and the sealed blob. The person who opens the link downloads
   `Quietport.dmg` or `Quietport.exe` (inside a zip), clicks Continue, and the folder appears. No email, no password.
+  Someone who already has Quietport pastes the link on **Share a folder** instead and joins without downloading
+  anything; the folders already on their computer stay as they are.
 - **Anyone can start a folder** from the same installer ("Start a new folder") when the hub's `open_signup` setting is
   on, and any member can start additional folders from the Share page. The founder owns the folder: the owner sees
   the people in it and can remove one, which re-keys the folder from the owner's device so the removed computer gets

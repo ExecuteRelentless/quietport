@@ -19,6 +19,12 @@ import (
 // Install runs the personalised installer (FR-13..18). It prints exactly one line on success.
 // Every failure returns a single plain sentence; the caller appends the support contact.
 func Install(ctx context.Context, code, payloadPath string) (err error) {
+	// a computer that already has Quietport is never installed again: that would replace its device and drop the
+	// config of every folder already here. A link is added to what is here through the Share page instead
+	// (docs/adr/0019), and Remove Quietport is the way to start over.
+	if Installed() {
+		return errors.New("Quietport is already on this computer, so paste the link on its Share a folder page instead, or remove Quietport first if it no longer works.")
+	}
 	raw, err := os.ReadFile(payloadPath)
 	if err != nil {
 		return errors.New("the invitation file could not be read.")

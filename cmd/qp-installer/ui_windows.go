@@ -51,6 +51,22 @@ func done() {
 	}
 }
 
+// joined: the folder from a link was added to the Quietport already here. note, when set, is what still needs doing.
+func joined(names []string, note string) {
+	msg := "You are in " + strings.Join(names, ", ") + ". It is in your QPSync folder. Open it now?"
+	if note != "" {
+		msg = note + " Open the folder now?"
+	}
+	if msgbox(msg, "Quietport", mbYesNo|mbIconInfo) == idYes {
+		_ = exec.Command("explorer.exe", agent.SyncRoot()).Start()
+	}
+}
+
+func joinFailed(msg string) {
+	msgbox("The folder could not be added: "+sentence(msg), "Quietport", mbOK|mbIconError)
+	exit(1)
+}
+
 func fail(msg, support string) {
 	if support == "" {
 		support = "the person who invited you"
@@ -77,8 +93,8 @@ func askText(prompt, def string) string {
 }
 
 func askInstalled() string {
-	// Yes = remove, No = use a new link, Cancel = cancel
-	r := msgbox("Quietport is already set up on this computer.\n\nYes: remove Quietport.\nNo: set it up again with a new link.", "Quietport", 0x3|mbIconInfo) // MB_YESNOCANCEL
+	// Yes = remove, No = add a folder from a link, Cancel = cancel
+	r := msgbox("Quietport is already set up on this computer.\n\nYes: remove Quietport.\nNo: add a folder from a new link.", "Quietport", 0x3|mbIconInfo) // MB_YESNOCANCEL
 	switch r {
 	case idYes:
 		return "remove"

@@ -16,6 +16,17 @@ func askLink() string {
 	return strings.TrimSpace(s)
 }
 func done() { fmt.Println("Quietport is connected.") }
+func joined(names []string, note string) {
+	if note != "" {
+		fmt.Println(note)
+		return
+	}
+	fmt.Println("You are in", strings.Join(names, ", ")+". It is in ~/QPSync.")
+}
+func joinFailed(msg string) {
+	fmt.Println("The folder could not be added:", sentence(msg))
+	exit(1)
+}
 func fail(msg, support string) {
 	fmt.Println("Quietport could not be installed:", msg, "Please contact", support+".")
 	exit(1)

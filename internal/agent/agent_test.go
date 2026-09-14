@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"quietport.app/quietport/internal/model"
 )
 
 func TestSemverNewer(t *testing.T) {
@@ -381,5 +384,104 @@ func TestTaskIsReplacedOnlyWhenAnOlderOneIsRegistered(t *testing.T) {
 	}
 	if shouldRefreshTask(old, errors.New("schtasks is not on this computer")) {
 		t.Error("a query that failed says nothing about what is registered")
+	}
+}
+
+// Install begins from nothing and would replace this computer's device and drop every folder's config. On a
+// computer that already has Quietport it refuses, before it reads anything, and points at the join (docs/adr/0019).
+// The shell installers and the qpsync-agent command both reach Install; this is the last line behind both.
+func TestInstallRefusesToRunOverAnInstall(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	if Installed() {
+		t.Fatal("a fresh home must not count as installed")
+	}
+	err := Install(context.Background(), "abc", filepath.Join(home, "no-such-payload.json"))
+	if err == nil || !strings.Contains(err.Error(), "invitation file") {
+		t.Fatalf("with nothing installed, Install must get as far as the payload: %v", err)
+	}
+	_ = os.MkdirAll(AppDir(), 0o700)
+	_ = os.WriteFile(ConfigPath(), []byte("{\n  \"version\": 1,\n  \"device_id\": 5,\n  \"socks_port\": 1\n}\n"), 0o600)
+	if !Installed() {
+		t.Fatal("a config with a device is an install")
+	}
+	err = Install(context.Background(), "abc", filepath.Join(home, "no-such-payload.json"))
+	if err == nil || !strings.Contains(err.Error(), "already on this computer") {
+		t.Fatalf("Install must refuse to run over an install: %v", err)
+	}
+	if b, _ := os.ReadFile(ConfigPath()); !strings.Contains(string(b), `"device_id": 5`) {
+		t.Fatal("the refusal touched the config")
+	}
+}
+
+// A join adds the link's folders to a computer that already has Quietport and touches nothing else on it
+// (docs/adr/0019). Install could start from nothing and wipe the folder list; a join starts from a computer with
+// folders in it. A link for a folder this computer is already in, but whose key it lost, heals it. A key for a
+// generation the folder has moved past is kept for what it is, and the folder is marked as still needing the key.
+func TestJoinKeepsTheFoldersAlreadyOnThisComputer(t *testing.T) {
+	seal := func(v any) (string, error) { b, _ := json.Marshal(v); return "sealed:" + string(b), nil }
+	c := Config{DeviceID: 4, Circles: []CircleState{
+		{CircleConfig: model.CircleConfig{ID: 1, Slug: "family", DisplayName: "Family", Generation: 3}, KeySealed: "family-key", KeyGen: 3, S3Sealed: "family-s3"},
+		{CircleConfig: model.CircleConfig{ID: 2, Slug: "old", DisplayName: "Old"}, Removed: true},
+	}}
+	trip := model.CircleConfig{ID: 9, Slug: "trip-9x2a", DisplayName: "Trip", Generation: 1, S3AccessKey: "AK", S3SecretKey: "SK"}
+	tripKey := model.CircleKey{Slug: "trip-9x2a", Generation: 1, Password: "p", Salt: "s"}
+	if got := joinCircles(&c, []model.CircleConfig{trip}, []model.CircleKey{tripKey}, seal); !slices.Equal(got, []string{"Trip"}) {
+		t.Fatalf("joined folders: %v", got)
+	}
+	if len(c.Circles) != 3 {
+		t.Fatalf("expected the two folders already here plus Trip, got %d", len(c.Circles))
+	}
+	if f := c.Circles[0]; f.KeySealed != "family-key" || f.KeyGen != 3 || f.S3Sealed != "family-s3" || f.Resync || f.NeedsKey {
+		t.Errorf("Family was touched: %+v", f)
+	}
+	if !c.Circles[1].Removed {
+		t.Error("the removed folder came back")
+	}
+	sealedKey, _ := seal(tripKey)
+	sealedS3, _ := seal([2]string{"AK", "SK"})
+	if f := c.Circles[2]; f.ID != trip.ID || f.Slug != trip.Slug || f.DisplayName != "Trip" || f.Generation != 1 || f.KeySealed != sealedKey || f.KeyGen != 1 || !f.Resync || f.NeedsKey || f.S3Sealed != sealedS3 {
+		t.Errorf("Trip: %+v", f)
+	}
+	// the same link on the same computer again: no duplicate, still three
+	joinCircles(&c, []model.CircleConfig{trip}, []model.CircleKey{tripKey}, seal)
+	if len(c.Circles) != 3 {
+		t.Fatalf("a second join duplicated the folder: %d", len(c.Circles))
+	}
+	// a folder already here whose key was lost is healed by a link for it
+	c.Circles[0].NeedsKey, c.Circles[0].KeySealed, c.Circles[0].KeyGen = true, "", 0
+	family := model.CircleConfig{ID: 1, Slug: "family", DisplayName: "Family", Generation: 3, S3AccessKey: "FAK", S3SecretKey: "FSK"}
+	if got := joinCircles(&c, []model.CircleConfig{family}, []model.CircleKey{{Slug: "family", Generation: 3, Password: "fp", Salt: "fs"}}, seal); !slices.Equal(got, []string{"Family"}) {
+		t.Fatalf("healed folders: %v", got)
+	}
+	if f := c.Circles[0]; f.NeedsKey || f.KeySealed == "" || f.KeyGen != 3 || !f.Resync {
+		t.Errorf("Family was not healed: %+v", f)
+	}
+	// the same link again on a folder that is healthy: nothing changes, and no resync is scheduled
+	c.Circles[2].Resync = false
+	joinCircles(&c, []model.CircleConfig{trip}, []model.CircleKey{tripKey}, seal)
+	if f := c.Circles[2]; f.Resync || f.NeedsKey || f.KeyGen != 1 {
+		t.Errorf("a join that changed nothing must not schedule a resync: %+v", f)
+	}
+	// a link sealed before the folder was re-keyed: the key is kept for its generation and the folder still needs one
+	joinCircles(&c, []model.CircleConfig{{ID: 9, Slug: "trip-9x2a", DisplayName: "Trip", Generation: 2}}, []model.CircleKey{tripKey}, seal)
+	if f := c.Circles[2]; !f.NeedsKey || f.KeyGen != 1 || f.Generation != 2 {
+		t.Errorf("a stale key must not pass for the current one: %+v", f)
+	}
+	// a stale link must never replace a newer key this computer already holds: the folder was re-keyed to
+	// generation 2 and this computer has that key; a still-live generation-1 link changes nothing
+	gen2, _ := seal(model.CircleKey{Slug: "trip-9x2a", Generation: 2, Password: "p2", Salt: "s2"})
+	c.Circles[2].KeySealed, c.Circles[2].KeyGen, c.Circles[2].NeedsKey, c.Circles[2].Resync = gen2, 2, false, false
+	joinCircles(&c, []model.CircleConfig{{ID: 9, Slug: "trip-9x2a", DisplayName: "Trip", Generation: 2}}, []model.CircleKey{tripKey}, seal)
+	if f := c.Circles[2]; f.KeySealed != gen2 || f.KeyGen != 2 || f.NeedsKey || f.Resync {
+		t.Errorf("an older key replaced a newer one: %+v", f)
+	}
+	// a folder whose key did not arrive is listed and marked, not dropped
+	c2 := Config{}
+	joinCircles(&c2, []model.CircleConfig{trip}, nil, seal)
+	if len(c2.Circles) != 1 || !c2.Circles[0].NeedsKey || c2.Circles[0].KeySealed != "" {
+		t.Errorf("a folder without its key: %+v", c2.Circles)
 	}
 }

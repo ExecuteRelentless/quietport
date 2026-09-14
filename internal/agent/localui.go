@@ -105,6 +105,17 @@ button.quiet{background:#eef0f5;color:#0f1626}
 <div class="err" id="nferr" hidden></div>
 </form>
 </div>
+<div class="card" style="margin-top:1.2rem">
+<form id="jf" method="post" action="/join">
+<input type="hidden" name="t" value="{{.Token}}">
+<label for="jlink">Have a link from someone?</label>
+<input type="text" id="jlink" name="link" placeholder="Paste the link here" autocomplete="off">
+<button type="submit" class="quiet">Add the folder</button>
+<p class="hint">Nothing to download. The folder appears in QPSync on this computer now, and on your other computers the next time they check in (every 5 minutes).</p>
+<div class="err" id="jerr" hidden></div>
+<p class="hint" id="jok" hidden></p>
+</form>
+</div>
 {{range .Owned}}
 <div class="card" style="margin-top:1.2rem">
 <label>People in {{.DisplayName}}</label>
@@ -137,6 +148,13 @@ if(nf){nf.addEventListener('submit',async e=>{e.preventDefault();const b=nf.quer
  const r=await fetch('/circles',{method:'POST',body:new FormData(nf)});const j=await r.json();b.disabled=false;b.textContent='Create folder';
  const err=document.getElementById('nferr');if(!r.ok){err.textContent=j.error||'Something went wrong.';err.hidden=false;return}
  location.reload()});}
+const jf=document.getElementById('jf');
+if(jf){jf.addEventListener('submit',async e=>{e.preventDefault();const b=jf.querySelector('button');b.disabled=true;b.textContent='Adding…';
+ const r=await fetch('/join',{method:'POST',body:new FormData(jf)});const j=await r.json();b.disabled=false;b.textContent='Add the folder';
+ const err=document.getElementById('jerr');const ok=document.getElementById('jok');
+ if(!r.ok){err.textContent=j.error||'Something went wrong.';err.hidden=false;return}
+ err.hidden=true;ok.textContent=(j.note?j.note+'.':'You are in '+j.joined.join(', ')+'. It is in QPSync now.');ok.hidden=false;
+ if(!j.note){setTimeout(()=>location.reload(),2500)}});}
 </script></body></html>`))
 
 type uiCircle struct {
@@ -204,6 +222,25 @@ func (a *Agent) serveLocalUI(ctx context.Context, port int, token string) int {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"created": name})
+	})
+	mux.HandleFunc("POST /join", func(w http.ResponseWriter, r *http.Request) {
+		if !check(w, r) {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+		defer cancel()
+		names, err := a.join(ctx, r.FormValue("link"))
+		if err != nil && len(names) == 0 {
+			w.WriteHeader(400)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		out := map[string]any{"joined": names}
+		if err != nil {
+			out["note"] = err.Error() // the folder is there; the key is not, and the page says whom to ask
+		}
+		_ = json.NewEncoder(w).Encode(out)
 	})
 	mux.HandleFunc("GET /people", func(w http.ResponseWriter, r *http.Request) {
 		if !check(w, r) {

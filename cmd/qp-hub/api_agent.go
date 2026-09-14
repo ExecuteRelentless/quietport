@@ -47,6 +47,7 @@ func (h *Hub) routesAgent(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/heartbeat", h.withDevice(h.handleHeartbeat))
 	mux.HandleFunc("GET /v1/update/{os}/{arch}", h.withDevice(h.handleUpdateDownload))
 	mux.HandleFunc("POST /v1/invites", h.withDevice(h.handleDeviceInvite))
+	mux.HandleFunc("POST /v1/join", h.withDevice(h.handleJoin))
 	mux.HandleFunc("POST /v1/circles", h.withDevice(h.handleDeviceCircleCreate))
 	mux.HandleFunc("GET /v1/circles/{id}/people", h.withDevice(h.handleCirclePeople))
 	mux.HandleFunc("POST /v1/circles/{id}/remove", h.withDevice(h.handleCircleRemovePerson))
@@ -301,14 +302,7 @@ func (h *Hub) handleDeviceInvite(w http.ResponseWriter, r *http.Request, dev mod
 		writeErr(w, 403, "only the operator can invite people to this folder")
 		return
 	}
-	mems, _ := h.db.CirclesOf(inviter.ID)
-	allowed := false
-	for _, m := range mems {
-		if m.CircleID == c.ID && m.Role == "member" {
-			allowed = true
-		}
-	}
-	if !allowed {
+	if role, ok := h.db.MemberRole(inviter.ID, c.ID); !ok || role != "member" {
 		writeErr(w, 403, "you are not a read/write member of this folder")
 		return
 	}
@@ -346,7 +340,7 @@ func (h *Hub) handleDeviceInvite(w http.ResponseWriter, r *http.Request, dev mod
 	}
 	pakID, _ := pak.ID.Int64()
 	inv, err := h.db.InviteAdd(hubdb.InviteRow{Invite: model.Invite{InviterName: personLabel(inviter), CodeHash: req.CodeHash, PersonID: p.ID, CircleIDs: []int64{c.ID}, ExpiresAt: time.Now().Add(ttl), Prefix: req.Prefix},
-		PreAuthKey: pak.Key, PreAuthKeyID: pakID, SealedKeys: req.SealedKeys})
+		PreAuthKey: pak.Key, PreAuthKeyID: pakID, SealedKeys: req.SealedKeys, MintedPerson: true})
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -357,15 +351,125 @@ func (h *Hub) handleDeviceInvite(w http.ResponseWriter, r *http.Request, dev mod
 	writeJSON(w, 201, model.DeviceInviteResponse{URL: "https://" + h.cfg.Host + "/j/", ExpiresAt: inv.ExpiresAt, Person: p.Name})
 }
 
-// ownerCircle loads the circle in the path and checks the calling device's person owns it.
+// handleJoin: a computer that already has Quietport redeems an invite link for the person it belongs to
+// (docs/adr/0019). The link is the authorisation, exactly as it is for a fresh install: whoever holds the code can
+// open the keys sealed under it, so the hub adds the caller's person to the link's folders and hands those keys
+// back. Nothing is enrolled and nothing on the device is replaced. The person a member-made link minted, who now
+// has no purpose, is removed, and the invite row stays as the record of who redeemed it. The reply names the
+// joiner's own other computers and no one else: a member never learns who else is on this Quietport from here.
+func (h *Hub) handleJoin(w http.ResponseWriter, r *http.Request, dev model.Device) {
+	if !inviteLimiter.allow(clientIP(r)) {
+		writeErr(w, 429, "Too many attempts. Please try again in a few minutes.")
+		return
+	}
+	var req model.JoinRequest
+	if err := readJSON(r, &req); err != nil {
+		writeErr(w, 400, "bad request")
+		return
+	}
+	code := strings.ToLower(strings.TrimSpace(req.Code))
+	if !codeRe.MatchString(code) {
+		writeErr(w, 400, "that does not look like a Quietport invite link.")
+		return
+	}
+	person, err := h.db.PersonByID(dev.PersonID)
+	if err != nil || person.Status != model.StatusActive {
+		writeErr(w, 403, "not active")
+		return
+	}
+	inv, ok, err := h.db.InviteConsume(r.Context(), cryptobox.HashToken(code), clientIP(r))
+	if err != nil || !ok {
+		writeErr(w, 404, "This invitation link is no longer valid. Please ask the person who sent it for a new one.")
+		return
+	}
+	minted, mintedErr := h.db.PersonByID(inv.PersonID)
+	// the role the link carried: whatever its person was given in each folder
+	roles := map[int64]string{}
+	if mintedErr == nil {
+		if mems, err := h.db.CirclesOf(minted.ID); err == nil {
+			for _, m := range mems {
+				roles[m.CircleID] = m.Role
+			}
+		}
+	}
+	joined := []string{}
+	for _, cid := range inv.CircleIDs {
+		c, err := h.db.CircleByID(cid)
+		if err != nil {
+			continue
+		}
+		if err := h.db.MemberAdd(person.ID, c.ID, roles[c.ID]); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		joined = append(joined, c.Slug)
+	}
+	_ = h.db.InviteSetPerson(inv.ID, person.ID)
+	if len(joined) == 0 {
+		writeErr(w, 410, "The folder in this link no longer exists.")
+		return
+	}
+	if mintedErr == nil && inv.MintedPerson && minted.ID != person.ID {
+		h.removeMintedPerson(minted, inv)
+	}
+	bundle, err := h.configBundle(person, dev)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	out := model.JoinResponse{InviterName: inv.InviterName, SealedKeys: inv.SealedKeys, Circles: []model.CircleConfig{}, OtherDevices: []model.DeviceKey{}}
+	for _, cc := range bundle.Circles {
+		for _, cid := range inv.CircleIDs {
+			if cc.ID == cid {
+				out.Circles = append(out.Circles, cc)
+			}
+		}
+	}
+	devs, _ := h.db.Devices(person.ID)
+	for _, d := range devs {
+		if d.ID != dev.ID && d.Status == model.StatusActive && d.PubKey != "" {
+			out.OtherDevices = append(out.OtherDevices, model.DeviceKey{ID: d.ID, PubKey: d.PubKey})
+		}
+	}
+	h.db.Audit("device:"+strconv.FormatInt(dev.ID, 10)+"/"+person.Name, "invite.join", strings.Join(joined, ","), fmt.Sprintf("prefix=%s from %q", inv.Prefix, inv.InviterName))
+	h.db.Event("invite.joined", person.ID, dev.ID, fmt.Sprintf("%s joined %s with a link from %q", person.Name, strings.Join(joined, ","), inv.InviterName))
+	go h.notifyOperator("Quietport: "+personLabel(person)+" joined a folder", fmt.Sprintf("%s joined %s with a link from %s at %s, from a computer that already had Quietport.", personLabel(person), strings.Join(joined, ", "), inv.InviterName, time.Now().Format(time.RFC1123)))
+	_ = h.refreshPolicy()
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, out)
+}
+
+// removeMintedPerson takes away the person a member-made link created once someone who already had Quietport
+// redeemed that link. They never enrolled a device, so there is nothing on the mesh to revoke beyond the unused
+// pre-auth key and the empty mesh user; both are best effort, the record is what must go.
+func (h *Hub) removeMintedPerson(p model.Person, inv hubdb.InviteRow) {
+	if devs, _ := h.db.Devices(p.ID); len(devs) > 0 {
+		return // not a placeholder after all; leave them alone
+	}
+	if inv.PreAuthKeyID != 0 {
+		if err := h.hs.PreAuthKeyExpire(p.HSUserID, inv.PreAuthKeyID); err != nil {
+			logf("join: expiring the unused pre-auth key of %s: %v", p.Name, err)
+		}
+	}
+	if p.HSUserID != 0 {
+		if err := h.hs.UserDestroy(p.HSUserID); err != nil {
+			logf("join: removing the mesh user of %s: %v", p.Name, err)
+		}
+	}
+	if err := h.db.PersonDelete(p.ID); err != nil {
+		logf("join: removing %s: %v", p.Name, err)
+		return
+	}
+	h.db.Audit("system", "person.remove", p.Name, "minted by invite "+inv.Prefix+", redeemed by an existing member")
+}
+
+// ownerCircle loads the circle in the path and checks the calling device's person owns it. A folder that does not
+// exist gets the same answer as one the caller does not own: circle ids are sequential, and a member must not be
+// able to count folders on this Quietport by probing them.
 func (h *Hub) ownerCircle(w http.ResponseWriter, r *http.Request, dev model.Device) (model.Circle, bool) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	c, err := h.db.CircleByID(id)
-	if err != nil {
-		writeErr(w, 404, "no such folder")
-		return c, false
-	}
-	if c.OwnerPersonID == 0 || c.OwnerPersonID != dev.PersonID {
+	if err != nil || c.OwnerPersonID == 0 || c.OwnerPersonID != dev.PersonID {
 		writeErr(w, 403, "only the owner of this folder can do that")
 		return c, false
 	}
@@ -503,15 +607,38 @@ func (h *Hub) handleCircleGenerationDevice(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, 200, map[string]any{"ok": true, "generation": in.Generation})
 }
 
+// handleCircleGrantsDevice stores circle keys sealed to devices. The owner stores them for everyone still in after
+// a re-key. Any member's device may store them for the other computers of its own person, which is how a folder
+// joined on one computer reaches that person's others (docs/adr/0019); a grant for anyone else's computer refuses
+// the whole batch.
 func (h *Hub) handleCircleGrantsDevice(w http.ResponseWriter, r *http.Request, dev model.Device) {
-	c, ok := h.ownerCircle(w, r, dev)
-	if !ok {
-		return
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	c, err := h.db.CircleByID(id)
+	if err != nil {
+		c = model.Circle{ID: id} // answered exactly like a folder the caller is not in, below
 	}
 	var gs []model.KeyGrant
 	if err := readJSON(r, &gs); err != nil {
 		writeErr(w, 400, "bad request")
 		return
+	}
+	if c.OwnerPersonID == 0 || c.OwnerPersonID != dev.PersonID {
+		if _, ok := h.db.MemberRole(dev.PersonID, c.ID); !ok {
+			writeErr(w, 403, "you are not in this folder")
+			return
+		}
+		own := map[int64]bool{}
+		if devs, err := h.db.Devices(dev.PersonID); err == nil {
+			for _, d := range devs {
+				own[d.ID] = true
+			}
+		}
+		for _, g := range gs {
+			if !own[g.DeviceID] {
+				writeErr(w, 403, "you can only pass a key to your own computers")
+				return
+			}
+		}
 	}
 	for _, g := range gs {
 		g.CircleID = c.ID

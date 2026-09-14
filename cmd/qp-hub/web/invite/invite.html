@@ -35,6 +35,7 @@ ol{padding-left:1.2rem;margin:0 0 1rem}ol li{margin-bottom:.5rem}
 {{else if eq .OS "win"}}<p>Open PowerShell (press the Windows key, type <b>PowerShell</b>, press Enter), paste the line below and press Enter.</p><pre>{{.Win1}}</pre>
 <p>When it says <b>Quietport is connected.</b>, look for the QPSync folder in File Explorer.</p>
 {{else}}<p>Open this link on the Mac or Windows computer where you want the folder to appear.</p>{{end}}
+<p class="small">Already have Quietport on this computer? There is nothing to download. Open <b>Share a folder</b> inside your QPSync folder, paste this link under <b>Have a link from someone?</b> and click <b>Add the folder</b>. It appears in QPSync.</p>
 <details><summary>Other options</summary>
 {{if .MacApp}}<p>Mac: <a href="/j/{{.Code}}/Quietport-{{.Code}}.dmg">download the installer</a>, or paste this in Terminal:</p>{{else}}<p>Mac, paste this in Terminal:</p>{{end}}<pre>{{.Mac1}}</pre>
 {{if .WinApp}}<p>Windows: <a href="/j/{{.Code}}/Quietport-{{.Code}}.zip">download the installer</a>, or paste this in PowerShell:</p>{{else}}<p>Windows, paste this in PowerShell:</p>{{end}}<pre>{{.Win1}}</pre>

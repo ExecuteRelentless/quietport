@@ -210,6 +210,28 @@ type InvitePayload struct {
 	Code          string `json:"code,omitempty"` // only in /j/new responses: the enrolment code the hub minted
 }
 
+// JoinRequest: a device that already has Quietport redeems an invite link for the person it belongs to. No new
+// person, no new device, no reinstall (docs/adr/0019).
+type JoinRequest struct {
+	Code string `json:"code"`
+}
+
+// JoinResponse carries what the joining device needs: the folders it is now in (with storage credentials, the same
+// shape a heartbeat sends), the circle keys the inviter sealed under the code, and the joiner's own other computers
+// so the device can seal the key to them. It never names anyone else.
+type JoinResponse struct {
+	InviterName  string         `json:"inviter_name,omitempty"`
+	Circles      []CircleConfig `json:"circles"`
+	SealedKeys   string         `json:"sealed_keys"`
+	OtherDevices []DeviceKey    `json:"other_devices"`
+}
+
+// DeviceKey is a device as a sealing target: its id and its public key, nothing else.
+type DeviceKey struct {
+	ID     int64  `json:"id"`
+	PubKey string `json:"pubkey"`
+}
+
 type AuditEntry struct {
 	ID        int64     `json:"id"`
 	Timestamp time.Time `json:"timestamp"`

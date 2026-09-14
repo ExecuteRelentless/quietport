@@ -68,6 +68,7 @@ func Open(path string) (*DB, error) {
 	_, _ = d.Exec(`ALTER TABLE invite ADD COLUMN inviter_name TEXT NOT NULL DEFAULT ''`)
 	_, _ = d.Exec(`ALTER TABLE person ADD COLUMN display_name TEXT NOT NULL DEFAULT ''`)
 	_, _ = d.Exec(`ALTER TABLE circle ADD COLUMN owner_person_id INTEGER NOT NULL DEFAULT 0`)
+	_, _ = d.Exec(`ALTER TABLE invite ADD COLUMN minted_person INTEGER NOT NULL DEFAULT 0`)
 	// audit_log is append-only (FR-93): forbid UPDATE/DELETE at the engine level.
 	_, _ = d.Exec(`CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END;`)
 	_, _ = d.Exec(`CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT,'audit_log is append-only'); END;`)
@@ -331,6 +332,15 @@ func (d *DB) MemberAdd(personID, circleID int64, role string) error {
 	_, err := d.Exec(`INSERT INTO membership(person_id,circle_id,role,added_at) VALUES(?,?,?,?) ON CONFLICT DO UPDATE SET role=excluded.role`, personID, circleID, role, now())
 	return err
 }
+
+// MemberRole reports whether the person is in the circle and with which role.
+func (d *DB) MemberRole(personID, circleID int64) (string, bool) {
+	var role string
+	if err := d.QueryRow(`SELECT role FROM membership WHERE person_id=? AND circle_id=?`, personID, circleID).Scan(&role); err != nil {
+		return "", false
+	}
+	return role, true
+}
 func (d *DB) MemberRemove(personID, circleID int64) error {
 	_, err := d.Exec(`DELETE FROM membership WHERE person_id=? AND circle_id=?`, personID, circleID)
 	return err
@@ -446,16 +456,17 @@ type InviteRow struct {
 	SealedKeys   string
 	Revoked      bool
 	ConsumedIP   string
+	MintedPerson bool // the invite created its person (a member-made link); a join may remove them again
 }
 
-const inviteCols = `i.id,i.code_hash,i.prefix,i.person_id,p.name,i.circle_ids,i.preauth_key,i.preauth_key_id,i.sealed_keys,i.created_at,i.expires_at,i.consumed_at,i.consumed_ip,i.revoked,i.inviter_name`
+const inviteCols = `i.id,i.code_hash,i.prefix,i.person_id,p.name,i.circle_ids,i.preauth_key,i.preauth_key_id,i.sealed_keys,i.created_at,i.expires_at,i.consumed_at,i.consumed_ip,i.revoked,i.inviter_name,i.minted_person`
 
 func scanInvite(r interface{ Scan(...any) error }) (InviteRow, error) {
 	var v InviteRow
 	var cids, c, e string
 	var consumed sql.NullString
-	var rev int
-	err := r.Scan(&v.ID, &v.CodeHash, &v.Prefix, &v.PersonID, &v.PersonName, &cids, &v.PreAuthKey, &v.PreAuthKeyID, &v.SealedKeys, &c, &e, &consumed, &v.ConsumedIP, &rev, &v.InviterName)
+	var rev, minted int
+	err := r.Scan(&v.ID, &v.CodeHash, &v.Prefix, &v.PersonID, &v.PersonName, &cids, &v.PreAuthKey, &v.PreAuthKeyID, &v.SealedKeys, &c, &e, &consumed, &v.ConsumedIP, &rev, &v.InviterName, &minted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
 	}
@@ -463,13 +474,17 @@ func scanInvite(r interface{ Scan(...any) error }) (InviteRow, error) {
 		return v, err
 	}
 	_ = json.Unmarshal([]byte(cids), &v.CircleIDs)
-	v.CreatedAt, v.ExpiresAt, v.ConsumedAt, v.Revoked = ts(c), ts(e), tsp(consumed), rev == 1
+	v.CreatedAt, v.ExpiresAt, v.ConsumedAt, v.Revoked, v.MintedPerson = ts(c), ts(e), tsp(consumed), rev == 1, minted == 1
 	return v, nil
 }
 func (d *DB) InviteAdd(v InviteRow) (InviteRow, error) {
 	cids, _ := json.Marshal(v.CircleIDs)
-	res, err := d.Exec(`INSERT INTO invite(code_hash,prefix,person_id,circle_ids,preauth_key,preauth_key_id,sealed_keys,created_at,expires_at,inviter_name) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-		v.CodeHash, v.Prefix, v.PersonID, string(cids), v.PreAuthKey, v.PreAuthKeyID, v.SealedKeys, now(), v.ExpiresAt.UTC().Format(time.RFC3339), v.InviterName)
+	minted := 0
+	if v.MintedPerson {
+		minted = 1
+	}
+	res, err := d.Exec(`INSERT INTO invite(code_hash,prefix,person_id,circle_ids,preauth_key,preauth_key_id,sealed_keys,created_at,expires_at,inviter_name,minted_person) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		v.CodeHash, v.Prefix, v.PersonID, string(cids), v.PreAuthKey, v.PreAuthKeyID, v.SealedKeys, now(), v.ExpiresAt.UTC().Format(time.RFC3339), v.InviterName, minted)
 	if err != nil {
 		return v, err
 	}
@@ -530,6 +545,13 @@ func (d *DB) InvitePeek(h string) (InviteRow, bool) {
 		return v, false
 	}
 	return v, true
+}
+
+// InviteSetPerson records who a consumed invite ended up with: a join redeems a link for an existing person, not
+// the one the link was minted for.
+func (d *DB) InviteSetPerson(id, personID int64) error {
+	_, err := d.Exec(`UPDATE invite SET person_id=? WHERE id=?`, personID, id)
+	return err
 }
 func (d *DB) InviteRevoke(id int64) error {
 	_, err := d.Exec(`UPDATE invite SET revoked=1, sealed_keys='' WHERE id=?`, id)

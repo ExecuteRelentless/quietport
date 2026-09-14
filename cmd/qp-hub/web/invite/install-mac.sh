@@ -5,6 +5,8 @@ HOST="__HOST__"; CODE="__CODE__"; SUPPORT="__SUPPORT__"; OPERATOR="__OPERATOR__"
 APP="$HOME/Library/Application Support/Quietport"
 fail() { echo "Quietport could not be installed: $1 Please contact $OPERATOR ($SUPPORT)."; exit 1; }
 case "$(uname -m)" in arm64) ARCH=arm64;; x86_64) ARCH=amd64;; *) fail "this Mac's processor is not supported.";; esac
+# a computer that already has Quietport is never installed again: the link adds a folder to what is here (ADR 0019)
+if grep -q '"device_id": [1-9]' "$APP/config.json" 2>/dev/null; then exec "$APP/qpsync-agent" join "$CODE"; fi
 mkdir -p "$APP" || fail "the application folder could not be created."
 curl -fsSL "https://$HOST/dl/quietport-darwin-$ARCH.tar.gz" -o "$APP/bundle.tar.gz" || fail "the download did not complete."
 tar -xzf "$APP/bundle.tar.gz" -C "$APP" || fail "the download was damaged."

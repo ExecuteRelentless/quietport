@@ -3,6 +3,11 @@ $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'
 $QHost = '__HOST__'; $Code = '__CODE__'; $Support = '__SUPPORT__'; $Operator = '__OPERATOR__'
 $App = Join-Path $env:LOCALAPPDATA 'Quietport'
 function Fail($m) { Write-Host "Quietport could not be installed: $m Please contact $Operator ($Support)."; exit 1 }
+# a computer that already has Quietport is never installed again: the link adds a folder to what is here (ADR 0019)
+if ((Test-Path "$App\config.json") -and ((Get-Content "$App\config.json" -Raw) -match '"device_id": [1-9]')) {
+  & "$App\qpsync-agent.exe" join $Code | Out-Host
+  exit $LASTEXITCODE
+}
 try { New-Item -ItemType Directory -Force -Path $App | Out-Null } catch { Fail 'the application folder could not be created.' }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try { Invoke-WebRequest -UseBasicParsing "https://$QHost/dl/quietport-windows-amd64.zip" -OutFile "$App\bundle.zip" } catch { Fail 'the download did not complete.' }

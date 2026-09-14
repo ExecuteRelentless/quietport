@@ -37,6 +37,23 @@ func done() {
 	}
 }
 
+// joined: the folder from a link was added to the Quietport already here. note, when set, is what still needs doing.
+func joined(names []string, note string) {
+	msg := "You are in " + strings.Join(names, ", ") + ". It is in your QPSync folder."
+	if note != "" {
+		msg = note
+	}
+	out, _ := dialog(`button returned of (display dialog "` + esc(msg) + `" with title "Quietport" buttons {"Open Folder", "OK"} default button "Open Folder" with icon note)`)
+	if out == "Open Folder" {
+		_ = exec.Command("/usr/bin/open", agent.SyncRoot()).Run()
+	}
+}
+
+func joinFailed(msg string) {
+	_, _ = dialog(`display dialog "The folder could not be added: ` + esc(sentence(msg)) + `" with title "Quietport" buttons {"OK"} default button "OK" with icon stop`)
+	exit(1)
+}
+
 func fail(msg, support string) {
 	if support == "" {
 		support = "the person who invited you"
@@ -64,14 +81,14 @@ func askText(prompt, def string) string {
 
 // askInstalled: Quietport is already here. remove | join | cancel
 func askInstalled() string {
-	out, err := dialog(`button returned of (display dialog "Quietport is already set up on this computer." with title "Quietport" buttons {"Remove Quietport", "Use a new link", "Cancel"} default button "Cancel" with icon note)`)
+	out, err := dialog(`button returned of (display dialog "Quietport is already set up on this computer." with title "Quietport" buttons {"Remove Quietport", "Add a folder from a link", "Cancel"} default button "Cancel" with icon note)`)
 	if err != nil {
 		return "cancel"
 	}
 	switch out {
 	case "Remove Quietport":
 		return "remove"
-	case "Use a new link":
+	case "Add a folder from a link":
 		return "join"
 	}
 	return "cancel"

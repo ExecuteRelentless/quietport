@@ -41,19 +41,42 @@ func main() {
 		return
 	}
 	var startName, startFolder string
-	if code == "" && agent.Installed() {
-		switch askInstalled() {
-		case "remove":
-			keep := askKeepFolder()
-			if err := agent.Uninstall(!keep); err != nil {
-				fail("some files could not be removed.", "")
+	if agent.Installed() {
+		// a computer that already has Quietport never installs again: a link adds a folder to what is here, and
+		// everything else on the computer stays as it is (docs/adr/0019). Remove is the way to start over.
+		if code == "" {
+			switch askInstalled() {
+			case "remove":
+				keep := askKeepFolder()
+				if err := agent.Uninstall(!keep); err != nil {
+					fail("some files could not be removed.", "")
+				}
+				removed(keep)
+				return
+			case "cancel":
+				os.Exit(0)
 			}
-			removed(keep)
-			return
-		case "cancel":
+			link := askLink()
+			if link == "" {
+				os.Exit(1)
+			}
+			if _, code = parseLink(link); code == "" {
+				joinFailed("that does not look like a Quietport invite link.")
+			}
+		}
+		if !confirm("Quietport is already on this computer, so there is nothing to install. Add the folder from this link to it?") {
 			os.Exit(0)
 		}
-		// "join": fall through and ask for a link
+		names, err := agent.JoinInstalled(code)
+		if err != nil {
+			if len(names) > 0 {
+				joined(names, err.Error())
+				return
+			}
+			joinFailed(err.Error())
+		}
+		joined(names, "")
+		return
 	}
 	if code == "" {
 		if askStartOrJoin() { // start a new folder
@@ -170,6 +193,14 @@ func parseLink(s string) (host, code string) {
 		host = s[:i]
 	}
 	return host, code
+}
+
+// sentence gives a message its full stop when it has none; hub errors carry one, page errors do not.
+func sentence(s string) string {
+	if strings.HasSuffix(s, ".") {
+		return s
+	}
+	return s + "."
 }
 
 type payload struct {

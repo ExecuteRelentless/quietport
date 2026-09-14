@@ -1,4 +1,4 @@
-// qpsync-agent: the Quietport client. Subcommands: run | install | uninstall | status | version.
+// qpsync-agent: the Quietport client. Subcommands: run | install | join | uninstall | status | version.
 package main
 
 import (
@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,6 +52,21 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("Quietport is connected.")
+	case "join":
+		// a computer that already has Quietport: hand the link to the running agent (docs/adr/0019)
+		if len(os.Args) < 3 {
+			usage()
+		}
+		names, err := agent.JoinInstalled(os.Args[2])
+		if err != nil && len(names) == 0 {
+			fmt.Printf("The folder could not be added: %s\n", sentence(err.Error()))
+			os.Exit(1)
+		}
+		if err != nil {
+			fmt.Println(sentence(err.Error()))
+			return
+		}
+		fmt.Printf("You are in %s. It is in your QPSync folder.\n", strings.Join(names, ", "))
 	case "uninstall":
 		fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
 		rm := fs.Bool("remove-folder", false, "also delete ~/QPSync")
@@ -67,6 +83,14 @@ func main() {
 	}
 }
 
+// sentence gives a message its full stop when it has none; hub errors carry one, page errors do not.
+func sentence(s string) string {
+	if strings.HasSuffix(s, ".") {
+		return s
+	}
+	return s + "."
+}
+
 func supportContact(payload string) string {
 	if b, err := os.ReadFile(payload); err == nil {
 		var p struct {
@@ -81,6 +105,6 @@ func supportContact(payload string) string {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "qpsync-agent %s (%s/%s)\nusage: qpsync-agent run | install --code C --payload F | uninstall [--remove-folder] | status | version\n", Version, runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintf(os.Stderr, "qpsync-agent %s (%s/%s)\nusage: qpsync-agent run | install --code C --payload F | join <link> | uninstall [--remove-folder] | status | version\n", Version, runtime.GOOS, runtime.GOARCH)
 	os.Exit(2)
 }

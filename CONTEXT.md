@@ -44,8 +44,17 @@ operator created; the operator has no key for circles that members started.
 A one-time URL `https://<hub>/j/<code>` with a 26-character lowercase base32 **code**. The hub stores only
 `HashToken(code)`, the invitee person, the circle ids, who made it (**inviter**), and the circle keys sealed under a
 key derived from the code (`SealWithCode`). It works once and expires in 24 hours. Members make links from the
-**Share page**; the operator from `qpctl invite create`.
+**Share page**; the operator from `qpctl invite create`. Opened by a fresh install it **enrols** a new device of the
+person it was minted for; pasted on a computer that already has Quietport it **joins** (below).
 _Avoid_: token (that is the device's bearer secret), invitation code without "invite"
+
+**Join**:
+Redeeming an invite link from a computer that already has Quietport. The person that computer belongs to becomes a
+member of the link's circles, the computer opens the circle keys sealed under the code, and it seals them on to
+that person's other devices. Nothing is enrolled, nothing is reinstalled, every folder already on the computer
+stays, and the person a member-made link minted is removed. Members join from the **Share page** ("Have a link
+from someone?").
+_Avoid_: reinstall, re-enrol, attach, "use a new link"
 
 **Share page**:
 The local page the client serves on loopback (`127.0.0.1:<ui_port>/?t=<ui_token>`), reachable from the
@@ -109,7 +118,8 @@ _Avoid_: user on its own
 - A **hub** has many **persons**, **circles** and **devices**.
 - A **person** has many **devices** and many **memberships**; a **circle** has many **members** and one **owner**.
 - A **person** has one **mesh user**; a **device** has one **mesh identity**, new with every install.
-- An **invite** targets one **person** and one or more **circles**, records one **inviter**, and is consumed once.
+- An **invite** targets one **person** and one or more **circles**, records one **inviter**, and is consumed once,
+  by an enrolment or by a **join**; after a join it records the person who joined.
 - A **device** holds one **sealed grant** per **circle** and **generation** it may open.
 - The **operator** is a **person** only if they enrol a device of their own; `qpctl` needs no membership.
 
