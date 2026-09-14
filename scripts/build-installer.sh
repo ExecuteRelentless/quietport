@@ -2,6 +2,7 @@
 # Build the double-click installers: a notarized universal "Quietport Installer.app" for macOS and a windowsgui exe.
 # Usage: scripts/build-installer.sh <version> <hub host>
 # Env: NOTARY_KEY (p8 path), NOTARY_KEY_ID, NOTARY_ISSUER for notarization; skipped when absent (app is only signed).
+#      WINDOWS_INSTALLER=<signed Quietport.exe from the tag's CI run> uses CI's signed installer (docs/SIGNING.md).
 set -euo pipefail
 V="${1:?version}"; HOST="${2:?hub host}"
 R=$(cd "$(dirname "$0")/.." && pwd); cd "$R"
@@ -105,9 +106,17 @@ done
 echo "== Windows installer exe (client zip embedded)"
 WZ="$R/dist/$V/quietport-windows-amd64-$V.zip"
 [ -f "$WZ" ] || { echo "run scripts/build.sh $V first ($WZ missing)"; exit 1; }
-cp "$WZ" "$R/cmd/qp-installer/bundle/bundle.zip"
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDW -H windowsgui" -o "$R/dist/$V/quietport-installer-windows-amd64.exe" ./cmd/qp-installer
-rm -f "$R/cmd/qp-installer/bundle/bundle.zip"
+if [ -n "${WINDOWS_INSTALLER:-}" ]; then
+  # the signed installer from the tag's `windows` workflow (artifact windows-installer-signed, docs/SIGNING.md). It
+  # must be the installer CI built around the same client zip that build.sh took from CI, so that a member who
+  # installs gets the programs a self-update would give them
+  [ -n "${WINDOWS_CLIENT_ZIP:-}" ] || { echo "WINDOWS_INSTALLER needs the WINDOWS_CLIENT_ZIP from the same CI run"; exit 1; }
+  cp "$WINDOWS_INSTALLER" "$R/dist/$V/quietport-installer-windows-amd64.exe"
+else
+  cp "$WZ" "$R/cmd/qp-installer/bundle/bundle.zip"
+  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDW -H windowsgui" -o "$R/dist/$V/quietport-installer-windows-amd64.exe" ./cmd/qp-installer
+  rm -f "$R/cmd/qp-installer/bundle/bundle.zip"
+fi
 echo "== add the installers to the signed checksum list"
 if [ -f "$R/../release-keys/release.key" ]; then
   for f in "$R/dist/$V/quietport-installer-darwin.dmg" "$R/dist/$V/quietport-installer-windows-amd64.exe" "$R/dist/$V/quietport-installer-darwin.tar.gz" "$R/dist/$V/quietport-installer-linux-amd64" "$R/dist/$V/quietport-installer-linux-arm64"; do

@@ -1,7 +1,16 @@
 name: windows
 # Builds the Windows binaries from source on every tag and, when SignPath is configured, has them signed.
-# SignPath Foundation signs open-source projects for free (https://signpath.org/apply). The signing step is skipped
-# until the two SIGNPATH_* secrets exist, so the workflow is useful before approval too.
+# SignPath Foundation signs open-source projects for free (https://signpath.org/apply). Its terms allow signing only
+# what this project builds from source (a modified upstream build only when upstream publishes signed builds), so
+# rclone.exe, downloaded from rclone's releases, is never submitted; it may ride unsigned inside the signed installer.
+#
+# Order matters (docs/SIGNING.md): the installer embeds the client, so the client programs are signed FIRST and the
+# installer is built around the signed ones, then signed itself. Signing a finished installer would leave every
+# program it installs unsigned. The signing jobs are skipped until the two SIGNPATH_* secrets exist, and the installer
+# is then built around the unsigned client, so the workflow is useful before approval too.
+#
+# Artifacts a release uses (docs/RUNBOOK.md): windows-client-bundle (quietport-windows-amd64-<v>.zip, the self-update
+# bundle) and windows-installer-signed, or windows-installer-unsigned before approval.
 on:
   push:
     tags: ["v*"]
@@ -10,11 +19,12 @@ permissions:
   contents: read
   id-token: write
 jobs:
-  build:
+  client:
     runs-on: ubuntu-24.04
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
       sign: ${{ steps.cfg.outputs.sign }}
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - name: Is SignPath configured?
@@ -28,8 +38,8 @@ jobs:
       - name: Windows resources (icon, version info, manifest)
         run: |
           go install github.com/tc-hib/go-winres@latest
-          for d in cmd/qp-installer cmd/qpsync-agent; do (cd "$d" && go-winres make --arch amd64 --in winres/winres.json); done
-      - name: Build agent, qpctl and tailscale for Windows
+          (cd cmd/qpsync-agent && go-winres make --arch amd64 --in winres/winres.json)
+      - name: Build the programs this project builds from source (agent, qpctl, tailscale)
         env: { CGO_ENABLED: "0", GOOS: windows, GOARCH: amd64 }
         run: |
           V=${{ steps.v.outputs.version }}
@@ -44,43 +54,101 @@ jobs:
           TSBUILD_DIR=/tmp/ts scripts/build-tailscale.sh windows amd64 out/client
           # the Firewall prompt names the file that listens, so the daemon carries the product's name (docs/adr/0015)
           mv out/client/tailscaled.exe "out/client/Quietport Network.exe"
-          curl -fsSL -o rclone.zip https://github.com/rclone/rclone/releases/download/v1.75.1/rclone-v1.75.1-windows-amd64.zip
-          unzip -q -j rclone.zip '*/rclone.exe' -d out/client
-          echo "$V" > out/client/VERSION
-      - name: Installer (client zip embedded)
-        env: { CGO_ENABLED: "0", GOOS: windows, GOARCH: amd64 }
-        run: |
-          V=${{ steps.v.outputs.version }}
-          (cd out/client && zip -q -j ../../cmd/qp-installer/bundle/bundle.zip ./*)
-          LD="-X main.Version=$V -X main.DefaultHost=${{ vars.HUB_HOST }} -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=${{ vars.RELEASE_PUBKEY }}"
-          go build -trimpath -ldflags "$LD -H windowsgui" -o out/Quietport.exe ./cmd/qp-installer
-      - name: Upload unsigned artifacts
+      - name: Upload the programs to sign
         id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: windows-unsigned
+          name: windows-client-unsigned
           path: |
-            out/Quietport.exe
             out/client/qpsync-agent.exe
             out/client/qpctl.exe
             out/client/Quietport Network.exe
             out/client/tailscale.exe
-  sign:
-    needs: build
-    if: needs.build.outputs.sign == 'true'
+
+  sign-client:
+    needs: client
+    if: needs.client.outputs.sign == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - name: Submit to SignPath
+      - name: Submit the client programs to SignPath
         uses: signpath/github-action-submit-signing-request@v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
           project-slug: quietport
           signing-policy-slug: release-signing
-          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
+          github-artifact-id: ${{ needs.client.outputs.artifact-id }}
           wait-for-completion: true
           output-artifact-directory: signed
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-signed
+          name: windows-client-signed
+          path: signed
+
+  installer:
+    needs: [client, sign-client]
+    # runs after the client is signed, or straight after the client build when signing is not configured, never
+    # around an unsigned client once signing is configured
+    if: ${{ !cancelled() && needs.client.result == 'success' && (needs.sign-client.result == 'success' || (needs.sign-client.result == 'skipped' && needs.client.outputs.sign != 'true')) }}
+    runs-on: ubuntu-24.04
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.27" }
+      - name: The client programs, signed when signing is configured
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.sign-client.result == 'success' && 'windows-client-signed' || 'windows-client-unsigned' }}
+          path: out/client
+      - name: rclone, unsigned upstream build, checksum-pinned
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/rclone.zip" https://github.com/rclone/rclone/releases/download/v1.75.1/rclone-v1.75.1-windows-amd64.zip
+          echo "200eb602c126d82aa38b51e0f6b9ae837473ff99b51278d3f6f837574c494d6e  $RUNNER_TEMP/rclone.zip" | sha256sum -c -
+          unzip -q -j "$RUNNER_TEMP/rclone.zip" '*/rclone.exe' -d out/client
+          echo "${{ needs.client.outputs.version }}" > out/client/VERSION
+          ls -la out/client
+          test -f out/client/qpsync-agent.exe && test -f "out/client/Quietport Network.exe" && test -f out/client/tailscale.exe && test -f out/client/qpctl.exe
+      - name: Windows resources (icon, version info, manifest)
+        run: |
+          go install github.com/tc-hib/go-winres@latest
+          (cd cmd/qp-installer && go-winres make --arch amd64 --in winres/winres.json)
+      - name: The self-update bundle and the installer around it
+        env: { CGO_ENABLED: "0", GOOS: windows, GOARCH: amd64 }
+        run: |
+          V=${{ needs.client.outputs.version }}
+          (cd out/client && zip -q -j "../quietport-windows-amd64-$V.zip" ./*)
+          cp "out/quietport-windows-amd64-$V.zip" cmd/qp-installer/bundle/bundle.zip
+          LD="-X main.Version=$V -X main.DefaultHost=${{ vars.HUB_HOST }} -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=${{ vars.RELEASE_PUBKEY }}"
+          go build -trimpath -ldflags "$LD -H windowsgui" -o out/Quietport.exe ./cmd/qp-installer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-client-bundle
+          path: out/quietport-windows-amd64-*.zip
+      - name: Upload the installer to sign
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-unsigned
+          path: out/Quietport.exe
+
+  sign-installer:
+    needs: [client, installer]
+    if: needs.client.outputs.sign == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Submit the installer to SignPath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: quietport
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ needs.installer.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-signed
           path: signed

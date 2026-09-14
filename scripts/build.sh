@@ -1,6 +1,8 @@
 #!/bin/bash
 # Build every Quietport binary and the per-platform client bundles. Run on the Mac (darwin cgo not needed: pure Go).
 # Usage: scripts/build.sh <version>      → dist/<version>/
+# Env: WINDOWS_CLIENT_ZIP=<windows-client-bundle zip from the tag's CI run> takes the signed Windows client from CI
+#      instead of building an unsigned one here (docs/SIGNING.md).
 set -euo pipefail
 V="${1:?version}"
 R=$(cd "$(dirname "$0")/.." && pwd)
@@ -49,6 +51,17 @@ echo "== client bundles"
 for t in "darwin arm64 osx-arm64" "darwin amd64 osx-amd64" "windows amd64 windows-amd64" "linux amd64 linux-amd64" "linux arm64 linux-arm64"; do
   os=$(echo $t | cut -d' ' -f1); arch=$(echo $t | cut -d' ' -f2); rcl=$(echo $t | cut -d' ' -f3)
   D="$OUT/client-$os-$arch"; rm -rf "$D"; mkdir -p "$D"
+  if [ "$os" = windows ] && [ -n "${WINDOWS_CLIENT_ZIP:-}" ]; then
+    # the signed Windows client from the tag's `windows` workflow (artifact windows-client-bundle, docs/SIGNING.md):
+    # used as it is, because rebuilding here would produce unsigned programs
+    [ "$(unzip -p "$WINDOWS_CLIENT_ZIP" VERSION | tr -d '\r\n')" = "$V" ] || { echo "$WINDOWS_CLIENT_ZIP is not version $V"; exit 1; }
+    for f in qpsync-agent.exe qpctl.exe "Quietport Network.exe" tailscale.exe rclone.exe; do
+      unzip -l "$WINDOWS_CLIENT_ZIP" "$f" >/dev/null || { echo "$WINDOWS_CLIENT_ZIP has no $f"; exit 1; }
+    done
+    unzip -q -o "$WINDOWS_CLIENT_ZIP" -d "$D"
+    cp "$WINDOWS_CLIENT_ZIP" "$OUT/quietport-windows-amd64-$V.zip"
+    continue
+  fi
   build $os $arch "$D"
   ext=""; [ "$os" = windows ] && ext=.exe
   cp "$VB/rclone/rclone-$RCLONE_VER-$rcl/rclone$ext" "$D/"
