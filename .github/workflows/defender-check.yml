@@ -1,0 +1,47 @@
+name: defender-check
+# Run by hand after a release. Two facts about the published Windows installer, from a Windows machine with current
+# Microsoft Defender definitions: whether Defender detects the installer or anything it installs, and whether a file
+# downloaded the way the PowerShell install line downloads it carries the Mark of the Web that makes SmartScreen warn.
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: hub host
+        default: quietport.app
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: windows-2022
+    steps:
+      - name: Defender status and current definitions
+        shell: pwsh
+        run: |
+          Update-MpSignature -ErrorAction Continue
+          Get-MpComputerStatus | Select-Object AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled, AntivirusSignatureVersion, AntivirusSignatureLastUpdated | Format-List
+      - name: Download the installer and the self-update bundle as the PowerShell line does
+        shell: pwsh
+        run: |
+          $d = Join-Path $env:RUNNER_TEMP "qp"; New-Item -ItemType Directory -Force $d | Out-Null
+          Invoke-WebRequest -UseBasicParsing "https://${{ inputs.host }}/dl/Quietport-Windows.zip" -OutFile "$d\installer.zip"
+          Invoke-WebRequest -UseBasicParsing "https://${{ inputs.host }}/dl/quietport-windows-amd64.zip" -OutFile "$d\bundle.zip"
+          foreach ($f in "installer.zip", "bundle.zip") {
+            $zone = Get-Item "$d\$f" -Stream Zone.Identifier -ErrorAction SilentlyContinue
+            "$f Mark of the Web: $(if ($zone) { 'PRESENT' } else { 'absent' })"
+          }
+          Expand-Archive "$d\installer.zip" "$d\installer"; Expand-Archive "$d\bundle.zip" "$d\bundle"
+          Get-ChildItem -Recurse "$d\installer", "$d\bundle" -File | Select-Object Name, Length | Format-Table
+      - name: Defender scan of every file
+        shell: pwsh
+        run: |
+          $d = Join-Path $env:RUNNER_TEMP "qp"
+          $mp = Get-ChildItem "C:\ProgramData\Microsoft\Windows Defender\Platform\*\MpCmdRun.exe" -ErrorAction SilentlyContinue | Sort-Object FullName | Select-Object -Last 1
+          if (-not $mp) { $mp = Get-Item "C:\Program Files\Windows Defender\MpCmdRun.exe" }
+          $found = 0
+          foreach ($f in Get-ChildItem -Recurse "$d\installer", "$d\bundle" -File) {
+            $out = & $mp.FullName -Scan -ScanType 3 -File $f.FullName -DisableRemediation 2>&1 | Out-String
+            $threat = ($out -split "`n" | Where-Object { $_ -match "Threat|found" }) -join " "
+            "{0,-28} exit {1}  {2}" -f $f.Name, $LASTEXITCODE, $threat.Trim()
+            if ($LASTEXITCODE -eq 2) { $found++ }
+          }
+          "files with a detection: $found"
