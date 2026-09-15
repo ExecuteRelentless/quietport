@@ -26,3 +26,8 @@ A decision is superseded by adding a new record, never by editing the old one.
 - [0021 Each folder has its own directory on a computer, and arrives there with nothing in it](0021-each-folder-has-its-own-directory-and-arrives-empty.md)
 - [0022 New markers are the same file on every device, and a refusal over the marker takes the hub's](0022-every-marker-is-the-same-file.md)
 - [0023 A refused sync is reported, and a person chooses how it recovers](0023-a-refused-sync-is-reported-not-forced.md)
+- [0024 A heartbeat reports the path a ping to the hub took](0024-a-heartbeat-reports-the-path-a-ping-took.md)
+- [0025 The hub does not run its own relay, because it measured no faster](0025-the-hub-does-not-run-the-relay.md)
+- [0026 A broken Windows download resumes, because the zip is served as a view of the published exe](0026-a-broken-windows-download-resumes.md)
+- [0027 The Mac installer downloads the client for its own chip, and installs only the client bundle it was built with](0027-the-mac-installer-downloads-a-pinned-client.md)
+- [0028 Every 30 seconds an agent asks whether a key waits for it, and heartbeats at once when one does](0028-an-agent-asks-whether-a-grant-waits-for-it.md)

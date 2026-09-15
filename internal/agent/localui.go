@@ -111,7 +111,7 @@ button.quiet{background:#eef0f5;color:#0f1626}
 <label for="jlink">Have a link from someone?</label>
 <input type="text" id="jlink" name="link" placeholder="Paste the link here" autocomplete="off">
 <button type="submit" class="quiet">Add the folder</button>
-<p class="hint">Nothing to download. The folder appears in QPSync on this computer now, and on your other computers the next time they check in (every 5 minutes).</p>
+<p class="hint">Nothing to download. The folder appears in QPSync on this computer now, and on your other computers within a minute while they are on.</p>
 <div class="err" id="jerr" hidden></div>
 <p class="hint" id="jok" hidden></p>
 </form>

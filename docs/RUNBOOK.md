@@ -32,8 +32,8 @@ Conditions reported by agents (visible in `qpctl status`): `quota_exceeded:<slug
 `corrupt_state:<slug>` (agent has scheduled a full resync), `sync_refused:<slug>` (rclone's guard refused the folder
 three times in a row and it waits for a person, see "A folder that keeps refusing to sync"), `sync_failing:<slug>` (three
 failed syncs in a row for another reason, such as no connection; it heals by itself when it can), `disk_low`,
-`clock_skew`, and `relayed` when a device is going through a DERP relay instead of a direct path (slower; usually a NAT
-or VPN on the member's side). `sync_refused` and `sync_failing` are sent once per episode, on the third failure.
+`clock_skew`, and `relayed` when a device's ping to the hub went through a DERP relay instead of a direct path (about
+4 times slower; usually a VPN or a network that blocks UDP on the member's side; docs/adr/0024). `sync_refused` and `sync_failing` are sent once per episode, on the third failure.
 
 ## Onboarding
 
@@ -89,7 +89,7 @@ Caveat: the operator's keystore never holds the key of a self-started circle, so
 ## Adding someone to another circle
 
 ```
-qpctl circle add-member circle-1 alex          # key reaches Ben's devices on their next heartbeat (5 min)
+qpctl circle add-member circle-1 alex          # the key reaches Alex's computers that are on within about 30 s (docs/adr/0028)
 qpctl circle add-member newsletter ben --readonly
 ```
 
@@ -153,16 +153,20 @@ operator's Mac. Without it the backup is ciphertext.
 
 ## Installers (what members actually download)
 
-- Mac: `Quietport-<code>.dmg`, a notarized disk image holding `Quietport Installer.app`. The app carries the whole client
-  (qpsync-agent, rclone, tailscaled, tailscale, qp-sidebar, all universal, all signed) in `Contents/Resources/client`,
-  so the only thing it fetches from the hub is the invite payload. It reads the invite code from the disk image's file
-  name (via `hdiutil info`) or from the app folder name, and asks for the link if neither carries one.
+- Mac: `Quietport-<code>.dmg`, a notarized disk image holding `Quietport Installer.app` (universal, no client inside
+  since 0.1.29). On the member's computer it downloads `/dl/quietport-darwin-<chip>-<its version>.tar.gz`, the bundle
+  self-update installs, and installs it only if its sha256 is the one built into the app (docs/adr/0027); then it
+  fetches the invite payload. So the tarballs must be on the hub no later than the disk image, and every released Mac
+  tarball stays there. `build-installer.sh` prints the two pins; after publishing, `curl -s
+  https://<hub>/dl/quietport-darwin-arm64-<v>.tar.gz | shasum -a 256` (and amd64) must print them, or every new Mac
+  install fails. Never re-run `build.sh` for a version after `build-installer.sh`. It reads the invite code from the disk image's file name (via `hdiutil info`) or from the app
+  folder name, and asks for the link if neither carries one.
 - Windows: `Quietport-<code>.exe`, the same installer with the client zip embedded (`go:embed`), no console window,
-  MessageBox dialogs. Members download it inside `Quietport-<code>.zip`, which the hub builds on each request (ADR
-  0008). The bare `.exe` URL still works. Unsigned (no Windows certificate): SmartScreen shows More info / Run anyway once.
+  MessageBox dialogs. Members download it inside `Quietport-<code>.zip`, which the hub serves as a zip view of the
+  published exe, so a broken download resumes (ADR 0008, 0025). The bare `.exe` URL still works. Unsigned (no Windows certificate): SmartScreen shows More info / Run anyway once.
 - Linux (best effort): `quietport-installer-linux-<arch>`, client tarball embedded, prompts in the terminal, installs a
   systemd user unit. Run it as `./Quietport-linux-amd64` (no invite in the name: it asks for the link or offers to start a folder).
-- Both still fall back to downloading the client bundle from `/dl/` if a build ships without the embedded files.
+- The Windows installer still falls back to downloading the client bundle from `/dl/` if a build ships without the embedded files.
 - Every folder carries a hidden `.quietport` file (0.1.14+). rclone bisync refuses to run against a prior listing with
   no files in it ("empty prior Path1 listing"), so a folder nobody has filled yet failed every cycle, counted as an
   error and would have raised the "not updated for a week" notice. The marker keeps listings non-empty; the agent also
@@ -281,7 +285,13 @@ devices already enrolled keep working and pick up the new release on their own.
   hub serves code that touches keys, which is a different security model; see the README).
 - The operator keystore has no key for circles members started themselves, so `qpctl circle rotate-key` and
   `qpctl keys verify` do not apply to those; the owner rotates from their own device.
-- Updates and sync go through the mesh; a device shown as `relayed` (DERP) is slow, sometimes 100 KB/s. Direct paths
-  need UDP 41641 open to the hub.
+- Updates and sync go through the mesh; a device shown as `relayed` (DERP) is slow: on 2026-09-15 a 52 MB file took
+  1.45 MB/s relayed against 5.6 MB/s direct from the same computer. Direct paths need UDP 41641 open to the hub. A relay
+  on the hub itself was measured and was no faster (docs/adr/0025).
+- Changing Headscale's relay map (`derp:` in `/etc/headscale/config.yaml`): run `headscale configtest` as the
+  `headscale` system account, never as root (root creates a missing key file Headscale cannot read, and the service
+  does not start); afterwards run `sudo tailscale debug restun` on the hub and check `sudo tailscale status --json`
+  shows the nearest region as `Self.Relay`. The hub's daemon keeps the best latency per region from the last 5 minutes
+  of reports, so a report taken mid-change can hold a far region (Paris, on 2026-09-15) for up to 5 minutes.
 - Finder sidebar pinning uses a deprecated Apple API (`LSSharedFileList`) that still works on macOS 26; if Apple
   removes it, the folder still exists at `~/QPSync`, only the sidebar shortcut is lost.

@@ -43,6 +43,12 @@ func NewHubClient(base, token, socksURL string) (*HubClient, error) {
 	return &HubClient{base: base, token: token, http: &http.Client{Transport: tr, Timeout: 90 * time.Second}, dl: &http.Client{Transport: tr}}, nil
 }
 
+// NewDownloader downloads public release files from the hub over the internet, for the installer, which has no mesh
+// yet. Download resumes and watches for stalls exactly as it does for a self-update.
+func NewDownloader() *HubClient {
+	return &HubClient{dl: &http.Client{}}
+}
+
 func (c *HubClient) do(ctx context.Context, method, path string, in, out any) error {
 	var body io.Reader
 	if in != nil {
@@ -98,9 +104,18 @@ func (c *HubClient) Heartbeat(ctx context.Context, hb model.Heartbeat) (model.Co
 	return out, err
 }
 
+// Due asks whether a sealed grant waits for this device, so it heartbeats at once instead of at its next interval.
+func (c *HubClient) Due(ctx context.Context) (bool, error) {
+	var out struct {
+		Heartbeat bool `json:"heartbeat"`
+	}
+	err := c.do(ctx, "GET", "/v1/due", nil, &out)
+	return out.Heartbeat, err
+}
+
 func (c *HubClient) Ping(ctx context.Context) error { return c.do(ctx, "GET", "/v1/ping", nil, nil) }
 
-// Download fetches a URL through the proxy into part (resumable with Range across attempts), and returns the whole
+// Download fetches a URL (through the mesh proxy, or over the internet for NewDownloader) into part (resumable with Range across attempts), and returns the whole
 // file. It has no total deadline; it gives up only when no byte arrives for 3 minutes, so a slow relay link still
 // finishes over a few heartbeats.
 func (c *HubClient) Download(ctx context.Context, u, part string) ([]byte, http.Header, error) {
@@ -112,7 +127,9 @@ func (c *HubClient) Download(ctx context.Context, u, part string) ([]byte, http.
 	if err != nil {
 		return nil, nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 	if have > 0 {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", have))
 	}

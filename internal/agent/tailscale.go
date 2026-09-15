@@ -212,11 +212,10 @@ type Status struct {
 	BackendState string
 	TailnetIP    string
 	Online       bool
-	HubRelayed   bool // FR-23
 	HubSeen      bool
 }
 
-// Status reads `tailscale status --json`. hubIP identifies the peer whose path we report.
+// Status reads `tailscale status --json`. hubIP identifies the hub among the peers.
 func (t *TS) Status(ctx context.Context, hubIP string) (Status, error) {
 	out, err := t.cli(ctx, "status", "--json")
 	if err != nil {
@@ -230,8 +229,6 @@ func (t *TS) Status(ctx context.Context, hubIP string) (Status, error) {
 		} `json:"Self"`
 		Peer map[string]struct {
 			TailscaleIPs []string `json:"TailscaleIPs"`
-			CurAddr      string   `json:"CurAddr"`
-			Relay        string   `json:"Relay"`
 			Online       bool     `json:"Online"`
 			Active       bool     `json:"Active"`
 		} `json:"Peer"`
@@ -249,11 +246,33 @@ func (t *TS) Status(ctx context.Context, hubIP string) (Status, error) {
 		for _, ip := range p.TailscaleIPs {
 			if ip == hubIP {
 				st.HubSeen = true
-				st.HubRelayed = p.CurAddr == "" && p.Relay != ""
 			}
 		}
 	}
 	return st, nil
+}
+
+// HubPath pings the hub and reports the path the answer took: "direct", "relayed" or "down" (FR-23). Status cannot
+// say: the daemon clears a peer's CurAddr a few seconds after its last packet, so an idle direct path reads as relayed
+// (docs/adr/0024). A ping stops at the first direct answer, so a direct path costs one round trip.
+func (t *TS) HubPath(ctx context.Context, hubIP string) string {
+	out, _ := t.cli(ctx, "ping", "-c", "3", "--timeout", "3s", hubIP)
+	return pathFromPing(out)
+}
+
+// pathFromPing reads `tailscale ping` output: the last answer's path wins, no answer is down.
+func pathFromPing(out []byte) string {
+	path := "down"
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.HasPrefix(line, "pong from ") {
+			continue
+		}
+		path = "direct"
+		if strings.Contains(line, " via DERP(") || strings.Contains(line, " via peer-relay(") {
+			path = "relayed"
+		}
+	}
+	return path
 }
 
 // WaitRunning waits for the backend to be Running with an IP.

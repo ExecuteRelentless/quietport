@@ -179,7 +179,7 @@ func cmdCircle(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%s added to %s; key delivered to %d device(s) on their next heartbeat (within 5 minutes)\n", person, slug, n) // FR-111
+		fmt.Printf("%s added to %s; key delivered to %d device(s) within about 30 seconds of each being on\n", person, slug, n) // FR-111
 	case "remove-member":
 		slug, rest := firstArg(args[1:])
 		person, _ := firstArg(rest)

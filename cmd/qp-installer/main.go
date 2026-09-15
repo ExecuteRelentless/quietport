@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"quietport.app/quietport/internal/agent"
+	"quietport.app/quietport/internal/cryptobox"
 )
 
 var (
@@ -127,8 +128,8 @@ func runStart(host, name, folder string, support *string) error {
 	if err := os.MkdirAll(app, 0o700); err != nil {
 		return errors.New("the application folder could not be created.")
 	}
-	if err := installBundled(app); err != nil && err != errNoBundled {
-		return errors.New("the bundled files could not be copied.")
+	if err := installClient(app, host); err != nil {
+		return err
 	}
 	client := &http.Client{Timeout: 2 * time.Minute}
 	body, _ := jsonMarshal(map[string]string{"name": name, "folder": folder})
@@ -212,27 +213,13 @@ func run(host, code string, support *string) error {
 	if err := os.MkdirAll(app, 0o700); err != nil {
 		return errors.New("the application folder could not be created.")
 	}
-	client := &http.Client{Timeout: 10 * time.Minute}
-	// Everything the client needs ships inside the installer; the hub is only asked for the personal payload.
-	if err := installBundled(app); err != nil {
-		if err != errNoBundled {
-			return errors.New("the bundled files could not be copied.")
-		}
-		arch := runtime.GOARCH
-		var url string
-		if runtime.GOOS == "windows" {
-			url = fmt.Sprintf("https://%s/dl/quietport-windows-%s.zip", host, arch)
-		} else {
-			url = fmt.Sprintf("https://%s/dl/quietport-darwin-%s.tar.gz", host, arch)
-		}
-		b, err := get(client, url)
-		if err != nil {
-			return errors.New("the download did not complete.")
-		}
-		if err := extract(b, app); err != nil {
-			return errors.New("the download was damaged.")
-		}
+	if !linkLive("https://"+host, code) {
+		return errors.New("this invitation link is no longer valid.")
 	}
+	if err := installClient(app, host); err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 2 * time.Minute}
 	pl, err := get(client, fmt.Sprintf("https://%s/j/%s/payload", host, code))
 	if err != nil {
 		return errors.New("this invitation link is no longer valid.")
@@ -248,6 +235,73 @@ func run(host, code string, support *string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	return agent.Install(ctx, code, plPath)
+}
+
+// clientSumArm64 and clientSumAmd64 pin the client a Mac installer installs: the sha256 of
+// quietport-darwin-<arch>-<Version>.tar.gz, compiled into the notarized installer by scripts/build-installer.sh
+// (docs/adr/0027). An installer built without them installs nothing it downloads.
+var clientSumArm64, clientSumAmd64 string
+
+// installClient puts the client programs into app: the ones this installer carries (Windows, Linux), or on a Mac the
+// client bundle of this release for the chip it runs on.
+func installClient(app, host string) error {
+	switch err := installBundled(app); {
+	case err == nil:
+		return nil
+	case err != errNoBundled:
+		return errors.New("the bundled files could not be copied.")
+	}
+	return downloadClient(runtime.GOOS, runtime.GOARCH, "https://"+host, app)
+}
+
+// downloadClient fetches this installer's own client bundle from base and extracts it into app. A Mac bundle must
+// match the sum built into the installer, or nothing is extracted. Windows release installers carry the client, and
+// their download is the development fallback it has always been; a Linux installer without its client stops here.
+func downloadClient(goos, arch, base, app string) error {
+	var url, want string
+	switch goos {
+	case "darwin":
+		url, want = fmt.Sprintf("%s/dl/quietport-darwin-%s-%s.tar.gz", base, arch, Version), clientSumAmd64
+		if arch == "arm64" {
+			want = clientSumArm64
+		}
+	case "windows":
+		url = fmt.Sprintf("%s/dl/quietport-windows-%s.zip", base, arch)
+	default:
+		return errors.New("this installer carries no Quietport client.")
+	}
+	part := filepath.Join(app, "client-"+Version+".part")
+	dl := agent.NewDownloader()
+	var b []byte
+	var err error
+	for try := 1; try <= 5; try++ { // each try resumes where the last one stopped
+		if b, _, err = dl.Download(context.Background(), url, part); err == nil || try == 5 {
+			break
+		}
+		time.Sleep(time.Duration(try) * 2 * time.Second)
+	}
+	_ = os.Remove(part)
+	if err != nil {
+		return errors.New("the download did not complete.")
+	}
+	if goos == "darwin" && cryptobox.SHA256Hex(b) != want {
+		return errors.New("the download is not the Quietport release this installer was made for.")
+	}
+	if err := extract(b, app); err != nil {
+		return errors.New("the download was damaged.")
+	}
+	return nil
+}
+
+// linkLive asks the invite page whether a link still works, without using it up, so a dead link is known before the
+// client is downloaded.
+func linkLive(base, code string) bool {
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Get(fmt.Sprintf("%s/j/%s", base, code))
+	if err != nil {
+		return true // the payload request that follows reports an unreachable hub in its own words
+	}
+	resp.Body.Close()
+	return resp.StatusCode != http.StatusNotFound
 }
 
 func get(c *http.Client, u string) ([]byte, error) {

@@ -1,5 +1,7 @@
 #!/bin/bash
 # Build the double-click installers: a notarized universal "Quietport Installer.app" for macOS and a windowsgui exe.
+# The Mac app carries no client: it downloads quietport-darwin-<its chip>-<version>.tar.gz and installs it only if its
+# sha256 is the one compiled in below (docs/adr/0027), so publish the tarballs with the installer, never after it.
 # Usage: scripts/build-installer.sh <version> <hub host>
 # Env: NOTARY_KEY (p8 path), NOTARY_KEY_ID, NOTARY_ISSUER for notarization; skipped when absent (app is only signed).
 #      WINDOWS_INSTALLER=<signed Quietport.exe from the tag's CI run> uses CI's signed installer (docs/SIGNING.md).
@@ -13,25 +15,19 @@ PUB=$(cat "$R/../release-keys/release.pub" 2>/dev/null || echo "")
 LDW="-X main.Version=$V -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=$PUB"
 LD="-s -w -X main.Version=$V -X main.DefaultHost=$HOST -X quietport.app/quietport/internal/agent.Version=$V -X quietport.app/quietport/internal/agent.ReleasePubKey=$PUB"
 
-echo "== macOS universal binary"
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$LD" -o "$OUT/qpi-arm64" ./cmd/qp-installer
-CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "$LD" -o "$OUT/qpi-amd64" ./cmd/qp-installer
+CA="$R/dist/$V/quietport-darwin-arm64-$V.tar.gz"; CX="$R/dist/$V/quietport-darwin-amd64-$V.tar.gz"
+[ -f "$CA" ] && [ -f "$CX" ] || { echo "run scripts/build.sh $V first (client bundles missing)"; exit 1; }
+PIN="-X main.clientSumArm64=$(shasum -a 256 "$CA" | cut -d' ' -f1) -X main.clientSumAmd64=$(shasum -a 256 "$CX" | cut -d' ' -f1)"
+
+echo "== macOS universal installer (the client for each chip is downloaded, pinned by $PIN)"
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$LD $PIN" -o "$OUT/qpi-arm64" ./cmd/qp-installer
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "$LD $PIN" -o "$OUT/qpi-amd64" ./cmd/qp-installer
 lipo -create -output "$OUT/quietport-installer" "$OUT/qpi-arm64" "$OUT/qpi-amd64"
 rm "$OUT/qpi-arm64" "$OUT/qpi-amd64"
 
 APP="$OUT/Quietport Installer.app"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/client"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 mv "$OUT/quietport-installer" "$APP/Contents/MacOS/quietport-installer"
-
-echo "== bundle the whole client inside the app (universal binaries)"
-CA="$R/dist/$V/client-darwin-arm64"; CX="$R/dist/$V/client-darwin-amd64"
-[ -d "$CA" ] && [ -d "$CX" ] || { echo "run scripts/build.sh $V first (client bundles missing)"; exit 1; }
-for f in qpsync-agent qpctl rclone tailscaled tailscale; do
-  lipo -create -output "$APP/Contents/Resources/client/$f" "$CA/$f" "$CX/$f"
-done
-cp "$R/installers/mac/qp-sidebar" "$APP/Contents/Resources/client/qp-sidebar"
-echo "$V" > "$APP/Contents/Resources/client/VERSION"
-chmod 755 "$APP/Contents/Resources/client"/*
 cp "$R/installers/mac/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns" 2>/dev/null || true
 cat > "$APP/Contents/Info.plist" <<X
 <?xml version="1.0" encoding="UTF-8"?>
@@ -53,10 +49,6 @@ cat > "$APP/Contents/Info.plist" <<X
 X
 echo "== sign (hardened runtime, timestamp)"
 xattr -cr "$APP"   # Documents/iCloud adds FinderInfo xattrs that codesign refuses
-# notarization requires every Mach-O inside the bundle to carry a hardened-runtime signature
-for f in qpsync-agent qpctl rclone tailscaled tailscale qp-sidebar; do
-  codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP/Contents/Resources/client/$f"
-done
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 

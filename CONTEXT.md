@@ -83,7 +83,7 @@ folders, fetches grants, schedules resyncs.
 
 **Heartbeat**:
 The agent's 5-minute report to the hub: version, connection type (direct / relayed), free disk, per-circle sync
-health. The hub answers with the bundle.
+health. The hub answers with the bundle. A sealed grant waiting for a device brings its heartbeat forward.
 
 **Release** / **self-update**:
 A signed client bundle per OS/arch registered on the hub (`qp-hub release add`, `deploy/publish-release.sh`). Agents
@@ -94,8 +94,8 @@ swap binaries, restart, roll back after 2 failed starts.
 A hidden file the agent keeps in every folder so rclone bisync never sees an empty listing.
 
 **Installer**:
-`cmd/qp-installer`: the Mac app in a notarized DMG, the single Windows exe (downloaded inside a zip), the Linux binary. The client is embedded;
-the invite code comes from the file name, the app folder name, or a pasted link. It also removes an install.
+`cmd/qp-installer`: the Mac app in a notarized DMG, the single Windows exe (downloaded inside a zip), the Linux binary. The Windows and Linux
+installers carry the client; the Mac app downloads the client for its own chip from its release. The invite code comes from the file name, the app folder name, or a pasted link. It also removes an install.
 
 **Mesh** / **tailnet**:
 The Headscale-controlled WireGuard network. The hub is `100.64.0.1`, tagged `tag:hub`; every device runs userspace

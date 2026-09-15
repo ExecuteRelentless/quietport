@@ -34,6 +34,7 @@ type Agent struct {
 	watcher *Watcher
 	syncNow chan string
 	syncMu  sync.Mutex
+	hbMu    sync.Mutex // one heartbeat at a time: the loop, its retries and the due check all send them
 	hubIP   string
 }
 
@@ -417,11 +418,17 @@ func (a *Agent) pausedForDisk() bool {
 func (a *Agent) heartbeatLoop(ctx context.Context) {
 	t := time.NewTicker(model.HeartbeatInterval)
 	defer t.Stop()
+	due := time.NewTicker(model.DueInterval)
+	defer due.Stop()
 	backoff := time.Duration(0)
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-due.C:
+			if waiting, err := a.hub.Due(ctx); err == nil && waiting {
+				a.heartbeat(ctx) // a key for a folder waits for this computer (docs/adr/0028)
+			}
 		case <-t.C:
 			if !a.heartbeat(ctx) {
 				// FR-24: hub unreachable -> retry with backoff, capped at 5 minutes, inside the 5-minute cadence
@@ -439,14 +446,13 @@ func (a *Agent) heartbeatLoop(ctx context.Context) {
 }
 
 func (a *Agent) heartbeat(ctx context.Context) bool {
+	a.hbMu.Lock()
+	defer a.hbMu.Unlock()
 	_ = a.store.Config()
 	tsst, _ := a.ts.Status(ctx, a.hubIP)
 	conn := "down"
 	if tsst.BackendState == "Running" {
-		conn = "direct"
-		if tsst.HubRelayed {
-			conn = "relayed" // FR-23
-		}
+		conn = a.ts.HubPath(ctx, a.hubIP) // FR-23
 	}
 	a.stMu.Lock()
 	hb := model.Heartbeat{AgentVersion: Version, OS: runtime.GOOS + "/" + runtime.GOARCH, ConnectionType: conn, PerCircle: map[string]model.CircleHealth{},

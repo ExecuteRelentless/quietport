@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -117,6 +119,24 @@ func TestUpArgsUnattendedOnWindows(t *testing.T) {
 	for _, goos := range []string{"darwin", "linux"} {
 		if args := upArgs(goos, "https://hub.example", "key", "mac"); slices.Contains(args, "--unattended") {
 			t.Fatalf("%s: %q has --unattended, a Windows-only flag", goos, args)
+		}
+	}
+}
+
+// A heartbeat reported "relayed" whenever it read `tailscale status` while the hub's path sat idle: the daemon clears
+// CurAddr a few seconds after the last packet even though the path stays direct, so about 1 heartbeat in 6 across the
+// fleet said relayed on direct paths (docs/adr/0024). The path is what a ping to the hub actually took. The outputs
+// below are real ones from tailscale 1.102.3 on 2026-09-15 (the timeout lines are that release's own wording).
+func TestTheHubPathIsWhatAPingToTheHubTook(t *testing.T) {
+	for _, c := range []struct{ name, out, want string }{
+		{"direct on the first pong", "pong from quietport-hub (100.64.0.1) via 165.1.66.170:41641 in 54ms\n", "direct"},
+		{"relayed on every pong", "pong from quietport-hub (100.64.0.1) via DERP(sfo) in 172ms\npong from quietport-hub (100.64.0.1) via DERP(sfo) in 58ms\npong from quietport-hub (100.64.0.1) via DERP(sfo) in 54ms\n", "relayed"},
+		{"relayed first, then direct", "pong from quietport-hub (100.64.0.1) via DERP(sfo) in 61ms\npong from quietport-hub (100.64.0.1) via 165.1.66.170:41641 in 23ms\n", "direct"},
+		{"no answer", "ping \"100.64.0.1\" timed out\nping \"100.64.0.1\" timed out\nping \"100.64.0.1\" timed out\n", "down"},
+		{"nothing printed", "", "down"},
+	} {
+		if got := pathFromPing([]byte(c.out)); got != c.want {
+			t.Errorf("%s: pathFromPing = %q, want %q", c.name, got, c.want)
 		}
 	}
 }
@@ -1504,5 +1524,31 @@ func TestAFailedUpdateWaitsAnHourBeforeTheNextDownload(t *testing.T) {
 		if got := updateDue(c.s, c.ok, "0.1.27", now.Add(c.after)); got != c.want {
 			t.Errorf("%s: due %v, want %v", c.why, got, c.want)
 		}
+	}
+}
+
+// An agent asks the hub every 30 seconds whether a key waits for it (docs/adr/0028). The answer is read from the
+// hub's reply, and a hub that does not know the question (older than 0.1.29, 404) means no heartbeat is due.
+func TestAnAgentReadsWhetherAKeyWaitsForIt(t *testing.T) {
+	waiting := true
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/due" || r.Header.Get("Authorization") != "Bearer dev-token" {
+			http.NotFound(w, r)
+			return
+		}
+		fmt.Fprintf(w, `{"heartbeat":%t}`, waiting)
+	}))
+	defer hub.Close()
+	c := &HubClient{base: hub.URL, token: "dev-token", http: hub.Client()}
+	if due, err := c.Due(context.Background()); err != nil || !due {
+		t.Fatalf("a key waits: Due = %v, %v", due, err)
+	}
+	waiting = false
+	if due, err := c.Due(context.Background()); err != nil || due {
+		t.Fatalf("nothing waits: Due = %v, %v", due, err)
+	}
+	old := &HubClient{base: hub.URL + "/older-hub", token: "dev-token", http: hub.Client()}
+	if due, _ := old.Due(context.Background()); due {
+		t.Fatal("a hub without the question made a heartbeat due")
 	}
 }

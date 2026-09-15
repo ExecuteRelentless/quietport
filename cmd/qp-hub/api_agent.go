@@ -55,6 +55,7 @@ func (h *Hub) routesAgent(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /v1/circles/{id}/opkey/{ak}", h.withDevice(h.handleCircleOpKeyDeleteDevice))
 	mux.HandleFunc("POST /v1/circles/{id}/generation", h.withDevice(h.handleCircleGenerationDevice))
 	mux.HandleFunc("POST /v1/circles/{id}/grants", h.withDevice(h.handleCircleGrantsDevice))
+	mux.HandleFunc("GET /v1/due", h.withDevice(h.handleDue))
 	mux.HandleFunc("GET /v1/ping", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true, "time": time.Now().UTC()})
 	})
@@ -181,6 +182,12 @@ func (h *Hub) handleHeartbeat(w http.ResponseWriter, r *http.Request, dev model.
 		return
 	}
 	writeJSON(w, 200, cfg)
+}
+
+// handleDue is asked every 30 seconds: a key sealed to this device makes it heartbeat now, not at its next interval
+// (docs/adr/0028).
+func (h *Hub) handleDue(w http.ResponseWriter, r *http.Request, dev model.Device) {
+	writeJSON(w, 200, map[string]bool{"heartbeat": h.db.GrantWaiting(dev.ID)})
 }
 
 func absDur(d time.Duration) time.Duration {

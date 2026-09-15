@@ -595,6 +595,16 @@ func (d *DB) GrantsDeleteForDeviceCircle(deviceID, circleID int64) error {
 	_, err := d.Exec(`DELETE FROM key_grant WHERE device_id=? AND circle_id=?`, deviceID, circleID)
 	return err
 }
+
+// GrantWaiting reports whether a grant was stored for the device since its last heartbeat (docs/adr/0028). Times have
+// one-second resolution, so a grant stored in the second of a heartbeat still counts: one heartbeat too many, never a
+// key left waiting for the next 5 minutes.
+func (d *DB) GrantWaiting(deviceID int64) bool {
+	var waiting bool
+	_ = d.QueryRow(`SELECT EXISTS(SELECT 1 FROM key_grant g JOIN device v ON v.id=g.device_id WHERE g.device_id=? AND g.created_at >= v.last_heartbeat)`, deviceID).Scan(&waiting)
+	return waiting
+}
+
 func (d *DB) GrantExists(deviceID, circleID int64, gen int) bool {
 	var n int
 	_ = d.QueryRow(`SELECT COUNT(*) FROM key_grant WHERE device_id=? AND circle_id=? AND generation=?`, deviceID, circleID, gen).Scan(&n)

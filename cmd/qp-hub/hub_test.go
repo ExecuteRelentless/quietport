@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -150,6 +151,71 @@ func TestWindowsInstallerZip(t *testing.T) {
 		mux.ServeHTTP(head, httptest.NewRequest("HEAD", path, nil))
 		if head.Header().Get("Content-Length") != strconv.Itoa(len(body)) || head.Body.Len() != 0 {
 			t.Fatalf("%s HEAD: Content-Length %q, body %d bytes", path, head.Header().Get("Content-Length"), head.Body.Len())
+		}
+	}
+}
+
+// A Windows download that breaks resumes where it stopped (docs/adr/0026). The zip was built on each request and
+// answered every Range request with 200 and all 72 MB, so a browser's Resume started a slow download over from zero.
+// A resumed download must be the bytes of the same zip, and a zip from a newer installer must not be stitched onto it.
+func TestABrokenWindowsDownloadResumesWhereItStopped(t *testing.T) {
+	dir := t.TempDir()
+	exePath := filepath.Join(dir, "quietport-installer-windows-amd64.exe")
+	exe := bytes.Repeat([]byte("MZ quietport installer "), 4096)
+	if err := os.WriteFile(exePath, exe, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := hubdb.Open(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	p, _ := db.PersonAdd(model.Person{Name: "sam-k3q7", HSUser: "sam-k3q7"})
+	code := "abcdefghijklmnopqrstuvwxyz"
+	if _, err := db.InviteAdd(hubdb.InviteRow{Invite: model.Invite{CodeHash: cryptobox.HashToken(code), Prefix: code[:6], PersonID: p.ID, ExpiresAt: time.Now().Add(time.Hour)}}); err != nil {
+		t.Fatal(err)
+	}
+	h := &Hub{db: db, cfg: Config{ReleasesDir: dir}, site: fstest.MapFS{}}
+	mux := http.NewServeMux()
+	h.routesPublic(mux)
+
+	for _, path := range []string{"/j/" + code + "/Quietport-" + code + ".zip", "/dl/Quietport-Windows.zip"} {
+		full := httptest.NewRecorder()
+		mux.ServeHTTP(full, httptest.NewRequest("GET", path, nil))
+		whole := full.Body.Bytes()
+		validator := full.Header().Get("Last-Modified")
+		if full.Code != 200 || validator == "" {
+			t.Fatalf("%s: %d, Last-Modified %q (a browser resumes only against a validator)", path, full.Code, validator)
+		}
+
+		from := len(whole) / 3 // the connection broke a third of the way in
+		rest := httptest.NewRequest("GET", path, nil)
+		rest.Header.Set("Range", fmt.Sprintf("bytes=%d-", from))
+		rest.Header.Set("If-Range", validator)
+		resumed := httptest.NewRecorder()
+		mux.ServeHTTP(resumed, rest)
+		if resumed.Code != 206 {
+			t.Fatalf("%s: resume answered %d, want 206", path, resumed.Code)
+		}
+		if got := append(append([]byte(nil), whole[:from]...), resumed.Body.Bytes()...); !bytes.Equal(got, whole) {
+			t.Fatalf("%s: the resumed download is not the zip (%d bytes, want %d)", path, len(got), len(whole))
+		}
+
+		// a newer installer is published before the member presses Resume
+		later := time.Now().Add(time.Hour)
+		if err := os.Chtimes(exePath, later, later); err != nil {
+			t.Fatal(err)
+		}
+		stale := httptest.NewRequest("GET", path, nil)
+		stale.Header.Set("Range", fmt.Sprintf("bytes=%d-", from))
+		stale.Header.Set("If-Range", validator)
+		fresh := httptest.NewRecorder()
+		mux.ServeHTTP(fresh, stale)
+		if fresh.Code != 200 {
+			t.Fatalf("%s: resume against a replaced installer answered %d, want the whole new zip (200)", path, fresh.Code)
+		}
+		if err := os.Chtimes(exePath, time.Now(), time.Now().Add(-time.Hour)); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
@@ -412,6 +478,68 @@ func TestMemberDeviceGrantsOnlyToItsOwnComputers(t *testing.T) {
 	// the owner's re-key path is unchanged: grants for everyone still in
 	if rec := put(samDev, []model.KeyGrant{{DeviceID: mac.ID, Generation: 2, SealedBox: "b1"}, {DeviceID: pc.ID, Generation: 2, SealedBox: "b2"}, {DeviceID: samDev.ID, Generation: 2, SealedBox: "b3"}}); rec.Code != 200 {
 		t.Fatalf("owner: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// A key sealed to a person's other computer waited for that computer's next 5-minute heartbeat, so a folder joined on
+// one computer took up to 5 minutes to open on the next (docs/adr/0028). Every agent now asks the hub every 30
+// seconds whether a grant is waiting for it, and heartbeats at once when one is. The answer is yes from the moment a
+// grant is stored for that device until the device's next heartbeat, and never for a grant sealed to someone else.
+func TestADeviceIsToldToHeartbeatWhenAGrantWaitsForIt(t *testing.T) {
+	db, err := hubdb.Open(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	h := &Hub{db: db}
+	mux := http.NewServeMux()
+	h.routesAgent(mux)
+	pat, _ := db.PersonAdd(model.Person{Name: "pat", DisplayName: "Pat Lee", HSUser: "pat"})
+	trip, _ := db.CircleCreate(model.Circle{Slug: "trip-9x2a", DisplayName: "Trip", BucketPrefix: "qp-trip-9x2a", Generation: 1}, "AK", "SK")
+	_ = db.MemberAdd(pat.ID, trip.ID, "member")
+	_, _ = db.DeviceAdd(model.Device{PersonID: pat.ID, Hostname: "pats-mac", OS: "darwin", PubKey: "MACPUB"}, cryptobox.HashToken("mac-token"))
+	pc, _ := db.DeviceAdd(model.Device{PersonID: pat.ID, Hostname: "pats-pc", OS: "windows", PubKey: "PCPUB"}, cryptobox.HashToken("pc-token"))
+
+	as := func(token, method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+	due := func(token string) bool {
+		rec := as(token, "GET", "/v1/due", "")
+		var out struct {
+			Heartbeat bool `json:"heartbeat"`
+		}
+		if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &out) != nil {
+			t.Fatalf("GET /v1/due: %d %s", rec.Code, rec.Body)
+		}
+		return out.Heartbeat
+	}
+	heartbeat := func(token string) {
+		if rec := as(token, "POST", "/v1/heartbeat", `{"agent_version":"0.1.29"}`); rec.Code != 200 {
+			t.Fatalf("heartbeat: %d %s", rec.Code, rec.Body)
+		}
+	}
+
+	heartbeat("pc-token")
+	if due("pc-token") {
+		t.Fatal("a computer with nothing waiting was told to heartbeat")
+	}
+	if err := db.GrantPut(model.KeyGrant{DeviceID: pc.ID, CircleID: trip.ID, Generation: 1, SealedBox: "box-for-pc"}); err != nil {
+		t.Fatal(err)
+	}
+	if !due("pc-token") {
+		t.Fatal("a grant is waiting for the PC, and the PC was not told")
+	}
+	if due("mac-token") {
+		t.Fatal("the Mac was told to heartbeat for a grant sealed to the PC")
+	}
+	time.Sleep(1100 * time.Millisecond) // the hub's times have one-second resolution
+	heartbeat("pc-token")
+	if due("pc-token") {
+		t.Fatal("the PC's heartbeat delivered the grant, and it was still told to heartbeat")
 	}
 }
 

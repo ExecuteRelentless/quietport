@@ -262,5 +262,6 @@ const (
 	InviteByOperator   = "operator"
 	DefaultRetention   = 30
 	HeartbeatInterval  = 5 * time.Minute
+	DueInterval        = 30 * time.Second // how often an agent asks whether a grant waits for it (docs/adr/0028)
 	DefaultSyncSeconds = 60
 )

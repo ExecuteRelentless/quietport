@@ -2,14 +2,15 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
 	"hash/crc32"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
+	"sync"
 
 	"quietport.app/quietport/internal/cryptobox"
 )
@@ -132,48 +133,117 @@ func (h *Hub) serveWinZip(w http.ResponseWriter, r *http.Request, exeName, zipNa
 		http.Error(w, "installer not readable", 500)
 		return
 	}
-	fh := zip.FileHeader{Name: exeName, Method: zip.Store, CreatorVersion: 20, ReaderVersion: 20,
-		CompressedSize64: uint64(st.Size()), UncompressedSize64: uint64(st.Size())}
-	fh.SetModTime(st.ModTime()) // CreateRaw writes the MS-DOS date fields as given, and only SetModTime fills them
-	if r.Method != http.MethodHead {
-		crc := crc32.NewIEEE()
-		if _, err := io.Copy(crc, f); err != nil {
-			http.Error(w, "installer not readable", 500)
-			return
-		}
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
-			http.Error(w, "installer not readable", 500)
-			return
-		}
-		fh.CRC32 = crc.Sum32()
-	}
-	var size byteCounter
-	_ = oneFileZip(&size, fh, zeros{}, st.Size()) // the headers are fixed-width, so the CRC value cannot change the length
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, zipName))
-	w.Header().Set("Content-Length", strconv.FormatInt(int64(size), 10))
-	if r.Method == http.MethodHead {
+	sum, err := installerCRC(f, st)
+	if err != nil {
+		http.Error(w, "installer not readable", 500)
 		return
 	}
-	_ = oneFileZip(w, fh, f, st.Size())
+	fh := zip.FileHeader{Name: exeName, Method: zip.Store, CreatorVersion: 20, ReaderVersion: 20, CRC32: sum,
+		CompressedSize64: uint64(st.Size()), UncompressedSize64: uint64(st.Size())}
+	fh.SetModTime(st.ModTime()) // CreateRaw writes the MS-DOS date fields as given, and only SetModTime fills them
+	head, tail, err := zipAround(fh, st.Size())
+	if err != nil {
+		http.Error(w, "installer not readable", 500)
+		return
+	}
+	view := &zipView{head: head, body: f, size: st.Size(), tail: tail}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, zipName))
+	// ServeContent answers Range and If-Range against the exe's time, so a broken download resumes (docs/adr/0026)
+	http.ServeContent(w, r, "", st.ModTime(), io.NewSectionReader(view, 0, view.Len()))
 }
 
-// oneFileZip writes a zip holding one entry; body supplies size bytes already in fh.Method's encoding.
-func oneFileZip(w io.Writer, fh zip.FileHeader, body io.Reader, size int64) error {
-	zw := zip.NewWriter(w)
+// installerCRCs remembers the exe's CRC per file version, so a download costs one read of the exe, not two.
+var installerCRCs sync.Map
+
+func installerCRC(f *os.File, st os.FileInfo) (uint32, error) {
+	key := fmt.Sprintf("%s %d %d", f.Name(), st.Size(), st.ModTime().UnixNano())
+	if v, ok := installerCRCs.Load(key); ok {
+		return v.(uint32), nil
+	}
+	crc := crc32.NewIEEE()
+	if _, err := io.Copy(crc, io.NewSectionReader(f, 0, st.Size())); err != nil {
+		return 0, err
+	}
+	installerCRCs.Store(key, crc.Sum32())
+	return crc.Sum32(), nil
+}
+
+// zipView is a one-entry stored zip read in place: the headers before the entry and the central directory after it
+// are in memory, the entry's bytes are read from the file.
+type zipView struct {
+	head []byte
+	body io.ReaderAt
+	size int64
+	tail []byte
+}
+
+func (z *zipView) Len() int64 { return int64(len(z.head)) + z.size + int64(len(z.tail)) }
+
+func (z *zipView) ReadAt(p []byte, off int64) (int, error) {
+	n := 0
+	for len(p) > 0 {
+		hl, bl := int64(len(z.head)), z.size
+		var src io.ReaderAt
+		var base, end int64
+		switch {
+		case off < hl:
+			src, base, end = bytes.NewReader(z.head), 0, hl
+		case off < hl+bl:
+			src, base, end = z.body, hl, hl+bl
+		case off < z.Len():
+			src, base, end = bytes.NewReader(z.tail), hl+bl, z.Len()
+		default:
+			return n, io.EOF
+		}
+		chunk := p[:min(int64(len(p)), end-off)]
+		m, err := src.ReadAt(chunk, off-base)
+		n, off, p = n+m, off+int64(m), p[m:]
+		if m < len(chunk) {
+			if err == nil || err == io.EOF {
+				err = io.ErrUnexpectedEOF // the exe shrank under a running download
+			}
+			return n, err
+		}
+	}
+	return n, nil
+}
+
+// zipAround returns the bytes a one-entry stored zip has before and after the entry's size bytes.
+func zipAround(fh zip.FileHeader, size int64) (head, tail []byte, err error) {
+	out := &skipWriter{}
+	zw := zip.NewWriter(out)
 	fw, err := zw.CreateRaw(&fh)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	if _, err := io.CopyN(fw, body, size); err != nil {
-		return err
+	if err := zw.Flush(); err != nil { // the local header is out, so what is buffered so far is all of it
+		return nil, nil, err
 	}
-	return zw.Close()
+	head = bytes.Clone(out.kept.Bytes())
+	out.kept.Reset()
+	out.skip = size
+	if _, err := io.CopyN(fw, zeros{}, size); err != nil {
+		return nil, nil, err
+	}
+	if err := zw.Close(); err != nil {
+		return nil, nil, err
+	}
+	return head, out.kept.Bytes(), nil
 }
 
-type byteCounter int64
+// skipWriter keeps what is written to it, except the next skip bytes.
+type skipWriter struct {
+	skip int64
+	kept bytes.Buffer
+}
 
-func (c *byteCounter) Write(p []byte) (int, error) { *c += byteCounter(len(p)); return len(p), nil }
+func (w *skipWriter) Write(p []byte) (int, error) {
+	k := min(int64(len(p)), w.skip)
+	w.skip -= k
+	w.kept.Write(p[k:])
+	return len(p), nil
+}
 
 type zeros struct{}
 

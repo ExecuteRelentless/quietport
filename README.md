@@ -34,7 +34,7 @@ the installers and the public site. MIT licensed. Current release: 0.1.15.
 cmd/qp-hub            hub: public site, invite pages, downloads, agent + operator API, TLS front for Headscale
 cmd/qpctl             operator CLI (the only admin interface)
 cmd/qpsync-agent      member client: userspace tailscaled + rclone bisync per folder, heartbeat, Share page, self-update
-cmd/qp-installer      the installers: notarized Mac app inside a DMG, single Windows exe, Linux binary (client embedded)
+cmd/qp-installer      the installers: notarized Mac app inside a DMG (downloads the client for its chip), single Windows exe and Linux binary (client embedded)
 internal/             model, hubdb (SQLite), cryptobox, cred (Keychain / DPAPI), agent, shamir (vendored, MPL-2.0)
 deploy/               hub bootstrap, install and configure scripts, systemd units, Headscale and Garage configs, backups
 installers/           icons, and qp-sidebar (Finder sidebar helper, Objective-C, universal binary + source)
