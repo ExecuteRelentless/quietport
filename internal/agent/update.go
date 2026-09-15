@@ -7,12 +7,12 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -29,6 +29,14 @@ type updateState struct {
 	Attempts int       `json:"attempts"`
 	At       time.Time `json:"at"`
 	Previous string    `json:"previous"`
+	// Failed: why the update to Version could not be installed. Nothing was swapped, so there is no boot to check.
+	Failed string `json:"failed,omitempty"`
+}
+
+// updateDue: whether to fetch version now. An update installed or attempted within the last hour is not fetched
+// again, so a device whose swap fails does not download the bundle at every heartbeat (2026-09-14).
+func updateDue(s updateState, ok bool, version string, now time.Time) bool {
+	return !(ok && s.Version == version && now.Sub(s.At) < time.Hour)
 }
 
 func readUpdateState() (updateState, bool) {
@@ -52,7 +60,7 @@ func writeUpdateState(s *updateState) {
 // checkUpdateBoot runs first thing at start: if a just-applied update keeps failing to boot, roll back (NFR-41).
 func (a *Agent) checkUpdateBoot() error {
 	s, ok := readUpdateState()
-	if !ok {
+	if !ok || s.Failed != "" {
 		return nil
 	}
 	if s.Version == Version {
@@ -106,7 +114,7 @@ func (a *Agent) applyUpdate(ctx context.Context, u model.UpdateInfo) {
 	if u.Version == Version || !semverNewer(u.Version, Version) {
 		return // never fetch what is already running
 	}
-	if s, ok := readUpdateState(); ok && s.Version == u.Version && time.Since(s.At) < time.Hour {
+	if s, ok := readUpdateState(); !updateDue(s, ok, u.Version, time.Now()) {
 		return
 	}
 	part := filepath.Join(AppDir(), "update-"+u.Version+".part")
@@ -138,23 +146,14 @@ func (a *Agent) applyUpdate(ctx context.Context, u model.UpdateInfo) {
 	}
 	a.syncMu.Lock() // no rclone mid-swap
 	defer a.syncMu.Unlock()
-	for _, n := range bundleFiles() {
-		src := filepath.Join(stage, n)
-		if _, err := os.Stat(src); err != nil {
-			continue
-		}
-		cur := filepath.Join(AppDir(), n)
-		_ = os.Remove(cur + ".prev")
-		if err := os.Rename(cur, cur+".prev"); err != nil && !errors.Is(err, os.ErrNotExist) {
-			a.logf("update swap %s: %v", n, err)
-			return
-		}
-		if err := os.Rename(src, cur); err != nil {
-			_ = os.Rename(cur+".prev", cur)
-			a.logf("update place %s: %v", n, err)
-			return
-		}
-		_ = os.Chmod(cur, 0o755)
+	if err := swapBundle(AppDir(), stage, bundleFiles(), osSwapFS); err != nil {
+		a.logf("%v; nothing was replaced, and %s is not fetched again for an hour", err, u.Version)
+		writeUpdateState(&updateState{Version: u.Version, At: time.Now(), Previous: Version, Failed: err.Error()})
+		_ = os.RemoveAll(stage)
+		a.stMu.Lock()
+		a.addCondition("update_failed:" + u.Version)
+		a.stMu.Unlock()
+		return
 	}
 	for _, extra := range []string{"qp", "qp.cmd", "qp-sidebar"} {
 		if src := filepath.Join(stage, extra); fileExists(src) {
@@ -165,6 +164,76 @@ func (a *Agent) applyUpdate(ctx context.Context, u model.UpdateInfo) {
 	writeUpdateState(&updateState{Version: u.Version, At: time.Now(), Previous: Version})
 	a.logf("update %s installed, restarting", u.Version)
 	_ = a.reexec()
+}
+
+// swapFS: the two file operations a swap makes, so a test can make one of them fail the way Windows does.
+type swapFS struct {
+	remove func(string) error
+	rename func(from, to string) error
+}
+
+var osSwapFS = swapFS{remove: os.Remove, rename: os.Rename}
+
+// swapBundle replaces the bundle's programs in appDir with those in stage, all of them or none (2026-09-14). Each
+// program still in place becomes "<name>.prev" first, for checkUpdateBoot to roll back to. Windows will not delete
+// the file of a running program but will rename it, and a daemon an earlier update left behind runs from its
+// ".prev": such a backup is moved aside to "<name>.prev-<n>" instead of deleted, and removeAsideBackups clears those
+// once nothing runs from them. If any step fails, every program already replaced is put back.
+func swapBundle(appDir, stage string, files []string, fs swapFS) error {
+	type replaced struct {
+		cur    string
+		hadCur bool
+	}
+	var done []replaced
+	undo := func() {
+		for i := len(done) - 1; i >= 0; i-- {
+			_ = fs.remove(done[i].cur)
+			if done[i].hadCur {
+				_ = fs.rename(done[i].cur+".prev", done[i].cur)
+			}
+		}
+	}
+	for _, n := range files {
+		src := filepath.Join(stage, n)
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		cur, prev := filepath.Join(appDir, n), filepath.Join(appDir, n+".prev")
+		if _, err := os.Lstat(prev); err == nil {
+			if err := fs.remove(prev); err != nil {
+				if err := fs.rename(prev, prev+"-"+strconv.FormatInt(time.Now().UnixNano(), 10)); err != nil {
+					undo()
+					return fmt.Errorf("update swap %s: the previous backup is in the way: %w", n, err)
+				}
+			}
+		}
+		_, statErr := os.Lstat(cur)
+		hadCur := statErr == nil
+		if hadCur {
+			if err := fs.rename(cur, prev); err != nil {
+				undo()
+				return fmt.Errorf("update swap %s: %w", n, err)
+			}
+		}
+		if err := fs.rename(src, cur); err != nil {
+			if hadCur {
+				_ = fs.rename(prev, cur)
+			}
+			undo()
+			return fmt.Errorf("update place %s: %w", n, err)
+		}
+		_ = os.Chmod(cur, 0o755)
+		done = append(done, replaced{cur, hadCur})
+	}
+	return nil
+}
+
+// removeAsideBackups deletes the backups a swap moved aside, where nothing runs from them any more.
+func removeAsideBackups(appDir string) {
+	aside, _ := filepath.Glob(filepath.Join(appDir, "*.prev-*"))
+	for _, p := range aside {
+		_ = os.Remove(p)
+	}
 }
 
 func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }

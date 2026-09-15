@@ -38,7 +38,14 @@ func leftoverDaemons(procs []proc, appDir string) []int {
 		if p.PID <= 0 || !under(dir, p.Exe) {
 			continue
 		}
-		switch base(p.Exe) {
+		// Windows reports a running program by its file's current name, and an update renames the running daemon's
+		// file to ".prev", or a later update moves that aside to ".prev-<n>" (2026-09-13, Owl): the leftover runs
+		// under that name
+		name := base(p.Exe)
+		if i := strings.Index(name, ".prev"); i > 0 {
+			name = name[:i]
+		}
+		switch name {
 		case normPath(daemonName("windows")), "tailscaled.exe": // the current name and the one before docs/adr/0015
 			out = append(out, p.PID)
 		}

@@ -321,8 +321,14 @@ func TestLeftoverDaemonsAfterUpdate(t *testing.T) {
 		{PID: 22, Exe: app + `\tailscaled.exe`},                     // started before the rename
 		{PID: 23, Exe: app + `\qpsync-agent.exe`},                   // an agent: not this function's business
 		{PID: 24, Exe: `C:\Program Files\Tailscale\tailscaled.exe`}, // somebody else's Tailscale
+		// a self-update renames the running daemon's file aside before placing the new one, and Windows reports a
+		// running program by its file's current name: the daemon an update left behind runs as ".prev" (Owl, 0.1.25,
+		// 2026-09-13), or as a ".prev-<n>" copy moved out of the next update's way
+		{PID: 25, Exe: app + `\` + daemonName("windows") + `.prev`},
+		{PID: 26, Exe: app + `\` + daemonName("windows") + `.prev-1789400000`},
+		{PID: 27, Exe: app + `\qpsync-agent.exe.prev`}, // still an agent
 	}
-	if got, want := leftoverDaemons(procs, app), []int{21, 22}; !slices.Equal(got, want) {
+	if got, want := leftoverDaemons(procs, app), []int{21, 22, 25, 26}; !slices.Equal(got, want) {
 		t.Fatalf("stopping %v, want %v", got, want)
 	}
 }
@@ -1395,5 +1401,108 @@ func TestStatusGivesARefusedFolderTheCommandThatSettlesIt(t *testing.T) {
 	offline := folderState(CircleState{Folder: "Trip"}, model.CircleHealth{LastError: "connect: no route to host", Failures: 4})
 	if strings.Contains(offline, "resync") || !strings.Contains(offline, "no route to host") {
 		t.Errorf("failing for another reason: %q", offline)
+	}
+}
+
+// An update replaces the bundle's programs all together or not at all (2026-09-14). On Owl the swap stopped at the
+// daemon, after the agent and rclone had already been replaced, and every later attempt then failed on the agent:
+// the files on disk were a mix of two versions. A swap that cannot finish puts back every file it replaced.
+func TestAnUpdateSwapIsAllOrNothing(t *testing.T) {
+	files := []string{"qpsync-agent.exe", "rclone.exe", "Quietport Network.exe", "tailscale.exe"}
+	setup := func() (app, stage string) {
+		app, stage = t.TempDir(), t.TempDir()
+		for _, f := range files {
+			_ = os.WriteFile(filepath.Join(app, f), []byte("old "+f), 0o755)
+			_ = os.WriteFile(filepath.Join(stage, f), []byte("new "+f), 0o755)
+		}
+		return app, stage
+	}
+	read := func(p string) string { b, _ := os.ReadFile(p); return string(b) }
+
+	app, stage := setup()
+	if err := swapBundle(app, stage, files, osSwapFS); err != nil {
+		t.Fatalf("a swap with nothing in its way: %v", err)
+	}
+	for _, f := range files {
+		if read(filepath.Join(app, f)) != "new "+f || read(filepath.Join(app, f+".prev")) != "old "+f {
+			t.Errorf("%s after the swap: %q, previous %q", f, read(filepath.Join(app, f)), read(filepath.Join(app, f+".prev")))
+		}
+	}
+
+	app, stage = setup()
+	failing := osSwapFS
+	failing.rename = func(from, to string) error {
+		if filepath.Base(from) == "Quietport Network.exe" && strings.HasSuffix(to, ".prev") {
+			return errors.New("Access is denied.")
+		}
+		return os.Rename(from, to)
+	}
+	if err := swapBundle(app, stage, files, failing); err == nil {
+		t.Fatal("a swap that could not move the daemon reported success")
+	}
+	for _, f := range files {
+		if got := read(filepath.Join(app, f)); got != "old "+f {
+			t.Errorf("%s after a failed swap is %q, want the old program back", f, got)
+		}
+	}
+}
+
+// A backup a swap cannot delete is moved out of its way (2026-09-14). Windows will not delete the file of a running
+// program but will rename it, and the daemon an earlier update left behind runs from "<daemon>.prev", so deleting
+// that backup failed and the swap stopped with "Access is denied" on every attempt.
+func TestASwapMovesABackupItCannotDeleteOutOfTheWay(t *testing.T) {
+	app, stage := t.TempDir(), t.TempDir()
+	d := "Quietport Network.exe"
+	_ = os.WriteFile(filepath.Join(app, d), []byte("current"), 0o755)
+	_ = os.WriteFile(filepath.Join(app, d+".prev"), []byte("still running"), 0o755)
+	_ = os.WriteFile(filepath.Join(stage, d), []byte("new"), 0o755)
+	held := osSwapFS
+	held.remove = func(p string) error {
+		if filepath.Base(p) == d+".prev" {
+			return errors.New("Access is denied.")
+		}
+		return os.Remove(p)
+	}
+	if err := swapBundle(app, stage, []string{d}, held); err != nil {
+		t.Fatalf("swap with a backup still running: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(app, d)); string(b) != "new" {
+		t.Errorf("the new daemon is not in place: %q", b)
+	}
+	aside, _ := filepath.Glob(filepath.Join(app, d+".prev-*"))
+	if len(aside) != 1 {
+		t.Fatalf("the running backup was not moved aside: %v", aside)
+	}
+	if b, _ := os.ReadFile(aside[0]); string(b) != "still running" {
+		t.Errorf("moved aside: %q", b)
+	}
+	// a later start clears what it can of those
+	removeAsideBackups(app)
+	if left, _ := filepath.Glob(filepath.Join(app, "*.prev-*")); len(left) != 0 {
+		t.Errorf("backups moved aside were not cleared: %v", left)
+	}
+}
+
+// An update that could not be installed is not downloaded again at every heartbeat (2026-09-14). Owl fetched the
+// 60 MB bundle every 5 minutes for 11 hours and failed the same way each time. A failure waits an hour and is
+// reported to the hub, so the operator can see why a device is not updating.
+func TestAFailedUpdateWaitsAnHourBeforeTheNextDownload(t *testing.T) {
+	now := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
+	failed := updateState{Version: "0.1.27", At: now, Failed: "update swap qpsync-agent.exe: Access is denied."}
+	for _, c := range []struct {
+		why   string
+		s     updateState
+		ok    bool
+		after time.Duration
+		want  bool
+	}{
+		{"nothing recorded", updateState{}, false, 0, true},
+		{"failed 5 minutes ago", failed, true, 5 * time.Minute, false},
+		{"failed 61 minutes ago", failed, true, 61 * time.Minute, true},
+		{"a different version failed", updateState{Version: "0.1.26", At: now, Failed: "x"}, true, 5 * time.Minute, true},
+	} {
+		if got := updateDue(c.s, c.ok, "0.1.27", now.Add(c.after)); got != c.want {
+			t.Errorf("%s: due %v, want %v", c.why, got, c.want)
+		}
 	}
 }

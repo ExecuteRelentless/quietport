@@ -88,6 +88,7 @@ func Run(ctx context.Context) error {
 	if n := stopLeftoverDaemons(AppDir()); n > 0 {
 		a.logf("stopped %d mesh daemon(s) left running by the previous version", n)
 	}
+	removeAsideBackups(AppDir())
 	if refreshed, err := refreshStartup(); err != nil {
 		a.logf("bringing the startup entry up to date: %v", err)
 	} else if refreshed {
